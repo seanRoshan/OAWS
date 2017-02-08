@@ -1,0 +1,60 @@
+shader.cc~:319:    address_type start_pc = next_pc(start_thread);
+shader.cc~:344:address_type shader_core_ctx::next_pc( int tid ) const
+shader.cc~:569:        address_type pc = m_inst_fetch_buffer.m_pc;
+shader.cc~:625:                address_type pc  = m_warp[warp_id].get_pc();
+shader.cc~:626:                address_type ppc = pc + PROGRAM_MEM_START;
+shader.cc~:1083:address_type coalesced_segment(address_type addr, unsigned segment_size_lg2bytes)
+shader.cc~:1089:unsigned shader_core_ctx::translate_local_memaddr( address_type localaddr, unsigned tid, unsigned num_shader, unsigned datasize, new_addr_type* translated_addrs )
+shader.cc~:1094:   address_type thread_base = 0;
+shader.cc~:1131:          address_type local_word = localaddr/4 + i;
+shader.cc~:1132:          address_type linear_address = local_word*max_concurrent_threads*4 + thread_base + LOCAL_GENERIC_START;
+shader.cc~:1139:      address_type local_word = localaddr/4;
+shader.cc~:1140:      address_type local_word_offset = localaddr%4;
+shader.cc~:1142:      address_type linear_address = local_word*max_concurrent_threads*4 + local_word_offset + thread_base + LOCAL_GENERIC_START;
+mem_fetch.h:107:   address_type get_pc() const { return m_inst.empty()?-1:m_inst.pc; }
+stat-tool.h:89:   void set_span( address_type pc );
+stat-tool.h:98:   typedef tr1_hash_map<address_type, int> span_count_map;
+stat-tool.h:106:                     int nthreads, address_type start_pc, unsigned long long  start_cycle = 0);
+stat-tool.h:109:   void update_thread_pc( int thread_id, address_type pc );
+stat-tool.h:121:   std::vector<address_type> m_thread_pc;
+stat-tool.h:154:   void log(address_type pc, int warp_occ) {
+stat-tool.h:273:void create_thread_CFlogger( int n_loggers, int n_threads, address_type start_pc, unsigned long long  logging_interval);
+stat-tool.h:275:void cflog_update_thread_pc( int logger_id, int thread_id, address_type pc );
+stat-tool.h:283:void insn_warp_occ_log( int logger_id, address_type pc, int warp_occ );
+stat-tool.cc:118:void create_thread_CFlogger( int n_loggers, int n_threads, address_type start_pc, unsigned long long  logging_interval) 
+stat-tool.cc:150:void cflog_update_thread_pc( int logger_id, int thread_id, address_type pc ) 
+stat-tool.cc:202:void insn_warp_occ_log( int logger_id, address_type pc, int warp_occ)
+stat-tool.cc:517:void thread_insn_span::set_span( address_type pc ) 
+stat-tool.cc:584:                                     address_type start_pc, 
+stat-tool.cc:597:void thread_CFlocality::update_thread_pc( int thread_id, address_type pc ) 
+stack.cc:33:void push_stack(Stack *S, address_type val) {
+stack.cc:40:address_type pop_stack(Stack *S) {
+stack.cc:45:address_type top_stack(Stack *S) {
+stack.cc:55:   S->v = (address_type*)calloc(size, sizeof(address_type));
+stack.cc:76:int element_exist_stack(Stack *S, address_type value) {
+shader.h:112:    void init( address_type start_pc,
+shader.h:156:    address_type get_pc() const { return m_next_pc; }
+shader.h:157:    void set_next_pc( address_type pc ) { m_next_pc = pc; }
+shader.h:238:    address_type m_next_pc;
+shader.h:943:    ifetch_buffer_t( address_type pc, unsigned nbytes, unsigned warp_id ) 
+shader.h:952:    address_type m_pc;
+shader.h:1750:    address_type next_pc( int tid ) const;
+shader.h:1764:    unsigned translate_local_memaddr( address_type localaddr, unsigned tid, unsigned num_shader, unsigned datasize, new_addr_type* translated_addrs );
+shader.cc:319:    address_type start_pc = next_pc(start_thread);
+shader.cc:344:address_type shader_core_ctx::next_pc( int tid ) const
+shader.cc:569:        address_type pc = m_inst_fetch_buffer.m_pc;
+shader.cc:628:                address_type pc  = m_warp[warp_id].get_pc();
+shader.cc:629:                address_type ppc = pc + PROGRAM_MEM_START;
+shader.cc:1086:address_type coalesced_segment(address_type addr, unsigned segment_size_lg2bytes)
+shader.cc:1092:unsigned shader_core_ctx::translate_local_memaddr( address_type localaddr, unsigned tid, unsigned num_shader, unsigned datasize, new_addr_type* translated_addrs )
+shader.cc:1097:   address_type thread_base = 0;
+shader.cc:1134:          address_type local_word = localaddr/4 + i;
+shader.cc:1135:          address_type linear_address = local_word*max_concurrent_threads*4 + thread_base + LOCAL_GENERIC_START;
+shader.cc:1142:      address_type local_word = localaddr/4;
+shader.cc:1143:      address_type local_word_offset = localaddr%4;
+shader.cc:1145:      address_type linear_address = local_word*max_concurrent_threads*4 + local_word_offset + thread_base + LOCAL_GENERIC_START;
+stack.h:34:   address_type *v;
+stack.h:39:void push_stack(Stack *S, address_type val);
+stack.h:40:address_type pop_stack(Stack *S);
+stack.h:41:address_type top_stack(Stack *S);
+stack.h:47:int element_exist_stack(Stack *S, address_type value);
