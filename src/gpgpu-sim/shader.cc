@@ -783,8 +783,8 @@ void scheduler_unit::order_by_priority( std::vector< T >& result_list,
         T greedy_value = *last_issued_from_input;
         result_list.push_back( greedy_value );
 
-        /*
-        printf("\n-----------------------------------------------\nDRSVR WARP ORDER BEFORE: \n");
+        
+        printf("\n-----------------------------------------------\nYCHEN WARP ORDER BEFORE: \n");
         unsigned j = 0;
         for (unsigned i=0; i<temp.size(); i++) {
             if ( temp.at(i)->get_dynamic_warp_id() == 4294967295) {
@@ -794,7 +794,7 @@ void scheduler_unit::order_by_priority( std::vector< T >& result_list,
             printf("%u \t", temp.at(i)->get_dynamic_warp_id());
         }
         printf("\nActive Warps: %u \n-----------------------------------------------\n", j);
-        */
+        
         std::sort( temp.begin(), temp.end(), priority_func );
         /*
         printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER: \n");
@@ -3546,4 +3546,3 @@ void shader_core_ctx::checkExecutionStatusAndUpdate(warp_inst_t &inst, unsigned 
         }
     }
 }
-
