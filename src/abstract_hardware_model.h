@@ -310,6 +310,8 @@ public:
     void     get_pdom_stack_top_info( unsigned *pc, unsigned *rpc ) const;
     unsigned get_rp() const;
     void     print(FILE*fp) const;
+    void     print2() const;
+    unsigned get_m_stackSize() const;
 
 protected:
     unsigned m_warp_id;

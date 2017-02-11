@@ -875,7 +875,10 @@ void scheduler_unit::cycle()
 
         SCHED_DPRINTF( "Testing (warp_id %u, dynamic_warp_id %u)\n",
                        (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id() );
+
+
         unsigned warp_id = (*iter)->get_warp_id();
+        unsigned SM_id = this->get_sid();
         unsigned checked=0;
         unsigned issued=0;
         unsigned max_issue = m_shader->m_config->gpgpu_max_insn_issue_per_warp;
@@ -886,17 +889,69 @@ void scheduler_unit::cycle()
 
 
         while( !warp(warp_id).waiting() && !warp(warp_id).ibuffer_empty() && (checked < max_issue) && (checked <= issued) && (issued < max_issue) ) {
-			
+
+
+            // Shahriyar NOTE: warp_inst_t is instruction class
             const warp_inst_t *pI = warp(warp_id).ibuffer_next_inst();
             bool valid = warp(warp_id).ibuffer_next_valid();
+
+
             bool warp_inst_issued = false;
-            unsigned pc,rpc;
+
+            // RPC : PC for Reconvergence Point
+            unsigned pc, rpc;
+
             m_simt_stack[warp_id]->get_pdom_stack_top_info(&pc,&rpc);
+
             SCHED_DPRINTF( "Warp (warp_id %u, dynamic_warp_id %u) has valid instruction (%s)\n",
                            (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id(),
-                           ptx_get_insn_str( pc).c_str() );
+                           ptx_get_insn_str(pc).c_str() );
+
+
+
+
+
+            /*
+            if ( ptxFile == NULL) {
+                printf("DRSVR! NEW FILE CREATED!");
+            }
+
+            */
+
+
+
+            /*
+            if ( (warp_id==0) && (SM_id==0)){
+                printf("DRSVR STACK CONTENTS : %u\n", m_simt_stack[warp_id]->get_m_stackSize() );
+                m_simt_stack[warp_id]->print2();
+                printf("DRSVR: PC: %u RPC: %u PI->PC: %u \n", pc, rpc, pI->pc);
+            }
+            */
+
+
+
+            /*
+            if (rpc!=4294967295){
+                printf("DRSVR: PC:> %u RPC: %u \n", pc, rpc);
+                m_simt_stack[warp_id]->print2();
+            }
+             */
+
+
+            /*
+                printf("DRSVR1: Dynamic Warp id: %u ptx_insn_str(%u) : %s \n"
+                        , (*iter)->get_dynamic_warp_id()
+                        , pI->pc
+                        , ptx_get_insn_str(pI->pc).c_str() );
+                printf("DRSVR2: Dynamic Warp id: %u ptx_insn_str(%u) : %s \n"
+                        , (*iter)->get_dynamic_warp_id()
+                        , pc
+                        , ptx_get_insn_str(pc).c_str() );
+
+            */
+
             if( pI ) {
-				printf("DRSVR PC: %x \n", pI->pc);
+				//printf("DRSVR PC: %x \n", pI->pc);
                 assert(valid);
                 if( pc != pI->pc ) {
                     SCHED_DPRINTF( "Warp (warp_id %u, dynamic_warp_id %u) control hazard instruction flush\n",

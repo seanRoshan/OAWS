@@ -609,7 +609,9 @@ const simt_mask_t &simt_stack::get_active_mask() const
 
 void simt_stack::get_pdom_stack_top_info( unsigned *pc, unsigned *rpc ) const
 {
+    // Shahriyar NOTE: Divergence is here!
    assert(m_stack.size() > 0);
+    //printf("DRSVR: PC: %u RPC: %u\n", m_stack.back().m_pc, m_stack.back().m_recvg_pc);
    *pc = m_stack.back().m_pc;
    *rpc = m_stack.back().m_recvg_pc;
 }
@@ -646,6 +648,39 @@ void simt_stack::print (FILE *fout) const
         fprintf(fout,"\n");
     }
 }
+
+void simt_stack::print2 () const
+{
+    for ( unsigned k=0; k < m_stack.size(); k++ ) {
+        simt_stack_entry stack_entry = m_stack[k];
+        if ( k==0 ) {
+            printf("w%02d %1u ", m_warp_id, k );
+        } else {
+            printf("    %1u ", k );
+        }
+        for (unsigned j=0; j<m_warp_size; j++)
+            printf("%c", (stack_entry.m_active_mask.test(j)?'1':'0') );
+        printf(" pc: 0x%03x", stack_entry.m_pc );
+        if ( stack_entry.m_recvg_pc == (unsigned)-1 ) {
+            printf(" rp: ---- tp: %s cd: %2u ", (stack_entry.m_type==STACK_ENTRY_TYPE_CALL?"C":"N"), stack_entry.m_calldepth );
+        } else {
+            printf(" rp: %4u tp: %s cd: %2u ", stack_entry.m_recvg_pc, (stack_entry.m_type==STACK_ENTRY_TYPE_CALL?"C":"N"), stack_entry.m_calldepth );
+        }
+        if ( stack_entry.m_branch_div_cycle != 0 ) {
+            printf(" bd@%6u ", (unsigned) stack_entry.m_branch_div_cycle );
+        } else {
+            printf(" " );
+        }
+        //ptx_print_insn( stack_entry.m_pc, fout );
+        printf("\n");
+    }
+}
+
+unsigned simt_stack::get_m_stackSize() const
+{
+    return (m_stack.size());
+}
+
 
 void simt_stack::update( simt_mask_t &thread_done, addr_vector_t &next_pc, address_type recvg_pc, op_type next_inst_op,unsigned next_inst_size, address_type next_inst_pc )
 {
