@@ -332,6 +332,16 @@ void shader_core_ctx::init_warps( unsigned cta_id, unsigned start_thread, unsign
                     active_threads.set(t);
                 }
             }
+
+            /*
+            printf("DRSVR WARP #%u INIT: Clock: %llu PC: %4u %s\n"
+                    , i
+                    , gpu_tot_sim_cycle+gpu_sim_cycle
+                    , start_pc
+                    , active_threads.to_string().c_str()
+            );
+            */
+
             m_simt_stack[i]->launch(start_pc,active_threads);
             m_warp[i].init(start_pc,cta_id,i,active_threads, m_dynamic_warp_id);
             ++m_dynamic_warp_id;
@@ -696,6 +706,8 @@ void shader_core_ctx::issue_warp( register_set& pipe_reg_set, const warp_inst_t*
         m_warp[warp_id].set_membar();
     }
 
+    printf("DRSVR>> SMID: %d\n",get_sid());
+
     updateSIMTStack(warp_id,*pipe_reg);
     m_scoreboard->reserveRegisters(*pipe_reg);
     m_warp[warp_id].set_next_pc(next_inst->pc + next_inst->isize);
@@ -920,13 +932,23 @@ void scheduler_unit::cycle()
 
 
 
-            /*
-            if ( (warp_id==0) && (SM_id==0)){
-                printf("DRSVR STACK CONTENTS : %u\n", m_simt_stack[warp_id]->get_m_stackSize() );
+
+            if ( (warp_id==0)
+                 && (SM_id>=0)
+                 && (m_simt_stack[warp_id]->get_m_stackSize()>1)){
+                printf("\n-------------------------------------------------------------\n");
+                printf("DRSVR STACK CONTENTS : %u sim: %llu totSim: %llu warpID:%u smID:%u\n"
+                        , m_simt_stack[warp_id]->get_m_stackSize()
+                        , gpu_sim_cycle
+                        , gpu_tot_sim_cycle
+                        , warp_id
+                        , SM_id);
                 m_simt_stack[warp_id]->print2();
-                printf("DRSVR: PC: %u RPC: %u PI->PC: %u \n", pc, rpc, pI->pc);
+                printf("DRSVR: PC: %4u RPC: %4u PI->PC: %4u", pc, rpc, pI->pc);
+                printf("\n-------------------------------------------------------------\n");
             }
-            */
+
+
 
 
 

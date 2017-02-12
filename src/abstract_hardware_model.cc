@@ -610,10 +610,11 @@ const simt_mask_t &simt_stack::get_active_mask() const
 void simt_stack::get_pdom_stack_top_info( unsigned *pc, unsigned *rpc ) const
 {
     // Shahriyar NOTE: Divergence is here!
+    // GET TOP OF STACK
    assert(m_stack.size() > 0);
-    //printf("DRSVR: PC: %u RPC: %u\n", m_stack.back().m_pc, m_stack.back().m_recvg_pc);
    *pc = m_stack.back().m_pc;
    *rpc = m_stack.back().m_recvg_pc;
+    // printf("DRSVR: PC: %u RPC: %u\n", m_stack.back().m_pc, m_stack.back().m_recvg_pc);
 }
 
 unsigned simt_stack::get_rp() const 
@@ -660,7 +661,7 @@ void simt_stack::print2 () const
         }
         for (unsigned j=0; j<m_warp_size; j++)
             printf("%c", (stack_entry.m_active_mask.test(j)?'1':'0') );
-        printf(" pc: 0x%03x", stack_entry.m_pc );
+        printf(" pc: %4u", stack_entry.m_pc );
         if ( stack_entry.m_recvg_pc == (unsigned)-1 ) {
             printf(" rp: ---- tp: %s cd: %2u ", (stack_entry.m_type==STACK_ENTRY_TYPE_CALL?"C":"N"), stack_entry.m_calldepth );
         } else {
@@ -841,9 +842,15 @@ bool  core_t::ptx_thread_done( unsigned hw_thread_id ) const
   
 void core_t::updateSIMTStack(unsigned warpId, warp_inst_t * inst)
 {
+
     simt_mask_t thread_done;
     addr_vector_t next_pc;
     unsigned wtid = warpId * m_warp_size;
+
+    //printf("DRSVR wtid: %u \n", wtid);
+
+
+
     for (unsigned i = 0; i < m_warp_size; i++) {
         if( ptx_thread_done(wtid+i) ) {
             thread_done.set(i);
@@ -854,6 +861,49 @@ void core_t::updateSIMTStack(unsigned warpId, warp_inst_t * inst)
             next_pc.push_back( m_thread[wtid+i]->get_pc() );
         }
     }
+
+
+
+    std::vector<unsigned> myHistogram;
+    std::vector<unsigned> myHistoCounter;
+
+    unsigned tempPC;
+    bool matched = false;
+
+    for (unsigned i = 0; i<next_pc.size(); i++){
+
+            tempPC = next_pc.at(i);
+            for (unsigned j = 0; j < myHistogram.size() && (!matched); j++) {
+                    assert(matched==false);
+                    if (myHistogram.at(j)==tempPC) {
+                        myHistoCounter.at(j)++;
+                        matched = true;
+                        break;
+                    }
+            }
+
+            if (!matched) {
+                myHistogram.push_back(next_pc.at(i));
+                myHistoCounter.push_back(1);
+            }
+            else {
+                matched = false;
+            }
+                //printf("DRSVR warp#%u updateSIMTStack  nextPCSize:> %u\n", warpId, next_pc.size());
+                //printf("PC[%u] = %u\n", i, next_pc.at(i));
+    }
+
+    assert(myHistoCounter.size() == myHistogram.size());
+
+    if (myHistoCounter.size()>1) {
+        for (unsigned i=0; i<myHistoCounter.size(); i++){
+            printf("DRSVR warp#%u PC[%u] =  %u\n", warpId, myHistogram.at(i), myHistoCounter.at(i));
+        }
+        printf("--------------------------------------------------\n");
+    }
+
+
+
     m_simt_stack[warpId]->update(thread_done,next_pc,inst->reconvergence_pc, inst->op,inst->isize,inst->pc);
 }
 
