@@ -741,9 +741,13 @@ public:
         isize=0;
     }
     bool valid() const { return m_decoded; }
-    virtual void print_insn( FILE *fp ) const 
+
+    virtual void print_insn( FILE *fp ) const
     {
         fprintf(fp," [inst @ pc=0x%04x] ", pc );
+    }
+    virtual void print_insn2( ) const {
+        printf(" [inst @ pc=0x%04x] ", pc );
     }
     bool is_load() const { return (op == LOAD_OP || memory_op == memory_load); }
     bool is_store() const { return (op == STORE_OP || memory_op == memory_store); }

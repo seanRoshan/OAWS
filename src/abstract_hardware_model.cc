@@ -864,6 +864,8 @@ void core_t::updateSIMTStack(unsigned warpId, warp_inst_t * inst)
 
 
 
+    /* [DRSVR THREAD PC HISTOGRAM]
+
     std::vector<unsigned> myHistogram;
     std::vector<unsigned> myHistoCounter;
 
@@ -902,7 +904,7 @@ void core_t::updateSIMTStack(unsigned warpId, warp_inst_t * inst)
         printf("--------------------------------------------------\n");
     }
 
-
+    */
 
     m_simt_stack[warpId]->update(thread_done,next_pc,inst->reconvergence_pc, inst->op,inst->isize,inst->pc);
 }

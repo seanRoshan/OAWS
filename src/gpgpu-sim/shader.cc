@@ -706,7 +706,7 @@ void shader_core_ctx::issue_warp( register_set& pipe_reg_set, const warp_inst_t*
         m_warp[warp_id].set_membar();
     }
 
-    printf("DRSVR>> SMID: %d\n",get_sid());
+    //printf("DRSVR>> SMID: %d\n",get_sid());
 
     updateSIMTStack(warp_id,*pipe_reg);
     m_scoreboard->reserveRegisters(*pipe_reg);
@@ -932,6 +932,8 @@ void scheduler_unit::cycle()
 
 
 
+            /*[DRSVR STACK PRINT]
+
 
             if ( (warp_id==0)
                  && (SM_id>=0)
@@ -947,6 +949,9 @@ void scheduler_unit::cycle()
                 printf("DRSVR: PC: %4u RPC: %4u PI->PC: %4u", pc, rpc, pI->pc);
                 printf("\n-------------------------------------------------------------\n");
             }
+
+
+            */
 
 
 
@@ -975,12 +980,46 @@ void scheduler_unit::cycle()
             if( pI ) {
 				//printf("DRSVR PC: %x \n", pI->pc);
                 assert(valid);
+
+
+
+
+
+
+                // Shahriyar NOTE: Branch has been occured, so the pc is different from the instruction buffer
                 if( pc != pI->pc ) {
                     SCHED_DPRINTF( "Warp (warp_id %u, dynamic_warp_id %u) control hazard instruction flush\n",
                                    (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id() );
                     // control hazard
+
+
+                        printf("\n-------------------------------------------------------------\n");
+                        printf("DRSVR: PC: %4u RPC: %4u PI->PC: %4u\n", pc, rpc, pI->pc);
+                        printf("DRSVR STACK CONTENTS : %u sim: %llu totSim: %llu warpID:%u smID:%u\n"
+                                , m_simt_stack[warp_id]->get_m_stackSize()
+                                , gpu_sim_cycle
+                                , gpu_tot_sim_cycle
+                                , warp_id
+                                , SM_id);
+                        m_simt_stack[warp_id]->print2();
+                        warp(warp_id).print2_ibuffer();
+
+
+
+
+
+                    //printf("DRSVR PC: %x \n", pI->pc);
+
+                    printf("DRSVR: PC before set: %4u \n", warp(warp_id).get_pc());
+
                     warp(warp_id).set_next_pc(pc);
+
+                    printf("DRSVR: PC after set: %4u \n", warp(warp_id).get_pc());
+
                     warp(warp_id).ibuffer_flush();
+
+                    warp(warp_id).print2_ibuffer();
+                    printf("\n-------------------------------------------------------------\n");
                 } else {
                     valid_inst = true;
                     if ( !m_scoreboard->checkCollision(warp_id, pI) ) {
@@ -3082,6 +3121,20 @@ void shd_warp_t::print_ibuffer( FILE *fout ) const
     }
     fprintf(fout,"\n");
 }
+
+void shd_warp_t::print2_ibuffer() const
+{
+    printf("  ibuffer[%2u] : ", m_warp_id );
+    for( unsigned i=0; i < IBUFFER_SIZE; i++) {
+        const inst_t *inst = m_ibuffer[i].m_inst;
+        if( inst ) inst->print_insn2();
+        else if( m_ibuffer[i].m_valid )
+            printf(" <invalid instruction> ");
+        else printf(" <empty> ");
+    }
+    printf("\n");
+}
+
 
 void opndcoll_rfu_t::add_cu_set(unsigned set_id, unsigned num_cu, unsigned num_dispatch){
     m_cus[set_id].reserve(num_cu); //this is necessary to stop pointers in m_cu from being invalid do to a resize;

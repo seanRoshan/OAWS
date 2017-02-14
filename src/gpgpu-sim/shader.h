@@ -135,6 +135,7 @@ public:
 
     void print( FILE *fout ) const;
     void print_ibuffer( FILE *fout ) const;
+    void print2_ibuffer() const;
 
     unsigned get_n_completed() const { return n_completed; }
     void set_completed( unsigned lane ) 
