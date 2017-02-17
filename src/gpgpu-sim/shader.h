@@ -113,7 +113,9 @@ public:
                unsigned cta_id,
                unsigned wid,
                const std::bitset<MAX_WARP_SIZE> &active,
-               unsigned dynamic_warp_id )
+               unsigned dynamic_warp_id,
+               unsigned sm_id
+            )
     {
         m_cta_id=cta_id;
         m_warp_id=wid;
@@ -124,6 +126,7 @@ public:
         n_completed   -= active.count(); // active threads are not yet completed
         m_active_threads = active;
         m_done_exit=false;
+        m_sm_id = sm_id;
     }
 
     bool functional_done() const;
@@ -225,6 +228,7 @@ public:
 
     unsigned get_cta_id() const { return m_cta_id; }
 
+    unsigned get_sm_id() const { return m_sm_id;}
     unsigned get_dynamic_warp_id() const { return m_dynamic_warp_id; }
     unsigned get_warp_id() const { return m_warp_id; }
 
@@ -235,6 +239,7 @@ private:
     unsigned m_warp_id;
     unsigned m_warp_size;
     unsigned m_dynamic_warp_id;
+    unsigned m_sm_id;
 
     address_type m_next_pc;
     unsigned n_completed;          // number of threads in warp completed

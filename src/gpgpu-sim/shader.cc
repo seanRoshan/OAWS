@@ -341,9 +341,9 @@ void shader_core_ctx::init_warps( unsigned cta_id, unsigned start_thread, unsign
                     , active_threads.to_string().c_str()
             );
             */
-
+            
             m_simt_stack[i]->launch(start_pc,active_threads);
-            m_warp[i].init(start_pc,cta_id,i,active_threads, m_dynamic_warp_id);
+            m_warp[i].init(start_pc,cta_id,i,active_threads, m_dynamic_warp_id, m_sid );
             ++m_dynamic_warp_id;
             m_not_completed += n_active;
       }
@@ -695,7 +695,8 @@ void shader_core_ctx::issue_warp( register_set& pipe_reg_set, const warp_inst_t*
     m_warp[warp_id].ibuffer_free();
     assert(next_inst->valid());
     **pipe_reg = *next_inst; // static instruction information
-    (*pipe_reg)->issue( active_mask, warp_id, gpu_tot_sim_cycle + gpu_sim_cycle, m_warp[warp_id].get_dynamic_warp_id() ); // dynamic instruction information
+
+    (*pipe_reg)->issue( active_mask, warp_id, gpu_tot_sim_cycle + gpu_sim_cycle, m_warp[warp_id].get_dynamic_warp_id(), m_warp[warp_id].get_sm_id() ); // dynamic instruction information
     m_stats->shader_cycle_distro[2+(*pipe_reg)->active_count()]++;
     func_exec_inst( **pipe_reg );
     if( next_inst->op == BARRIER_OP ){
@@ -981,18 +982,13 @@ void scheduler_unit::cycle()
 				//printf("DRSVR PC: %x \n", pI->pc);
                 assert(valid);
 
-
-
-
-
-
                 // Shahriyar NOTE: Branch has been occured, so the pc is different from the instruction buffer
                 if( pc != pI->pc ) {
                     SCHED_DPRINTF( "Warp (warp_id %u, dynamic_warp_id %u) control hazard instruction flush\n",
                                    (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id() );
                     // control hazard
 
-
+                    /*
                         printf("\n-------------------------------------------------------------\n");
                         printf("DRSVR: PC: %4u RPC: %4u PI->PC: %4u\n", pc, rpc, pI->pc);
                         printf("DRSVR STACK CONTENTS : %u sim: %llu totSim: %llu warpID:%u smID:%u\n"
@@ -1003,23 +999,24 @@ void scheduler_unit::cycle()
                                 , SM_id);
                         m_simt_stack[warp_id]->print2();
                         warp(warp_id).print2_ibuffer();
-
+                     */
 
 
 
 
                     //printf("DRSVR PC: %x \n", pI->pc);
 
-                    printf("DRSVR: PC before set: %4u \n", warp(warp_id).get_pc());
+                    //printf("DRSVR: PC before set: %4u \n", warp(warp_id).get_pc());
 
                     warp(warp_id).set_next_pc(pc);
 
-                    printf("DRSVR: PC after set: %4u \n", warp(warp_id).get_pc());
+                    //printf("DRSVR: PC after set: %4u \n", warp(warp_id).get_pc());
 
                     warp(warp_id).ibuffer_flush();
 
-                    warp(warp_id).print2_ibuffer();
-                    printf("\n-------------------------------------------------------------\n");
+                    // DRSVR Print I-Buffer After
+                    //warp(warp_id).print2_ibuffer();
+                    //printf("\n-------------------------------------------------------------\n");
                 } else {
                     valid_inst = true;
                     if ( !m_scoreboard->checkCollision(warp_id, pI) ) {
@@ -1046,7 +1043,6 @@ void scheduler_unit::cycle()
 					
                  }
                  */
-
                             }
                         } else {
                             bool sp_pipe_avail = m_sp_out->has_free();
@@ -1074,8 +1070,18 @@ void scheduler_unit::cycle()
                // this case can happen after a return instruction in diverged warp
                SCHED_DPRINTF( "Warp (warp_id %u, dynamic_warp_id %u) return from diverged warp flush\n",
                               (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id() );
-               warp(warp_id).set_next_pc(pc);
-               warp(warp_id).ibuffer_flush();
+
+
+                //warp(warp_id).print2_ibuffer();
+                //printf("DRSVR: PC before set: %4u \n", warp(warp_id).get_pc());
+
+                warp(warp_id).set_next_pc(pc);
+                //warp(warp_id).print2_ibuffer();
+                //printf("DRSVR: PC after set: %4u \n", warp(warp_id).get_pc());
+
+
+                warp(warp_id).ibuffer_flush();
+                //warp(warp_id).print2_ibuffer();
             }
             if(warp_inst_issued) {
                 SCHED_DPRINTF( "Warp (warp_id %u, dynamic_warp_id %u) issued %u instructions\n",
@@ -1606,7 +1612,6 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
        if (m_core->get_config()->gmem_skip_L1D) 
            bypassL1D = true; 
    }
-
    if( bypassL1D ) {
        // bypass L1 cache
        unsigned control_size = inst.is_store() ? WRITE_PACKET_SIZE : READ_PACKET_SIZE;

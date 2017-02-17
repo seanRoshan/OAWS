@@ -316,6 +316,7 @@ public:
 protected:
     unsigned m_warp_id;
     unsigned m_warp_size;
+    unsigned m_sm_id;
 
     enum stack_entry_type {
         STACK_ENTRY_TYPE_NORMAL = 0,
@@ -710,6 +711,9 @@ struct dram_callback_t {
 
 class inst_t {
 public:
+
+    unsigned  DRSVR_COALESCE;
+
     inst_t()
     {
         m_decoded=false;
@@ -815,7 +819,8 @@ public:
     {
         m_uid=0;
         m_empty=true; 
-        m_config=NULL; 
+        m_config=NULL;
+        DRSVR_COALESCE = 0;
     }
     warp_inst_t( const core_config *config ) 
     { 
@@ -840,13 +845,14 @@ public:
     { 
         m_empty=true; 
     }
-    void issue( const active_mask_t &mask, unsigned warp_id, unsigned long long cycle, int dynamic_warp_id ) 
+    void issue( const active_mask_t &mask, unsigned warp_id, unsigned long long cycle, int dynamic_warp_id, unsigned sm_id )
     {
         m_warp_active_mask = mask;
         m_warp_issued_mask = mask; 
         m_uid = ++sm_next_uid;
         m_warp_id = warp_id;
         m_dynamic_warp_id = dynamic_warp_id;
+        m_sm_id = sm_id;
         issue_cycle = cycle;
         cycles = initiation_interval;
         m_cache_hit=false;
@@ -981,7 +987,8 @@ protected:
     bool m_isatomic;
     bool m_is_printf;
     unsigned m_warp_id;
-    unsigned m_dynamic_warp_id; 
+    unsigned m_dynamic_warp_id;
+    unsigned m_sm_id;
     const core_config *m_config; 
     active_mask_t m_warp_active_mask; // dynamic active mask for timing model (after predication)
     active_mask_t m_warp_issued_mask; // active mask at issue (prior to predication test) -- for instruction counting
