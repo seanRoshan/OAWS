@@ -709,10 +709,68 @@ struct dram_callback_t {
    class ptx_thread_info *thread;
 };
 
+
+
+class DRSVR {
+
+private:
+        unsigned x;
+
+        const unsigned warpPerSM = 24;
+
+        std::vector<unsigned> warpVector;
+
+public:
+
+    DRSVR() {
+        x = 0;
+        // 24 is the number of warps in each scheduler
+        for (unsigned i=0; i<warpPerSM; i++) {
+            warpVector.push_back(0);
+        }
+
+    }
+
+    void updateWarpVector(unsigned warpID) {
+        assert( (warpID<warpPerSM) && (warpID>=0) );
+        warpVector.at(warpID)++;
+    }
+
+    void printWarpVector() {
+        
+        printf("***************************************************************************************\n");
+        for (unsigned i=0; i<warpPerSM; i++ ) {
+            if (warpVector.at(i)!=0){
+                printf("WARP[%u] = %u \n" ,i ,warpVector.at(i));
+            }
+        }
+        printf("***************************************************************************************\n");
+    }
+
+    void incX () {
+            x++;
+        }
+
+    unsigned getX(){
+        return x;
+    }
+
+    void printX () {
+        printf("DRSVR X VALUE: %u", x);
+    }
+
+};
+
+
+
 class inst_t {
 public:
 
     unsigned  DRSVR_COALESCE;
+
+
+
+    DRSVR *smObj;
 
     inst_t()
     {
@@ -815,26 +873,31 @@ const unsigned MAX_ACCESSES_PER_INSN_PER_THREAD = 8;
 class warp_inst_t: public inst_t {
 public:
     // constructors
-    warp_inst_t() 
+    warp_inst_t()
     {
         m_uid=0;
         m_empty=true; 
         m_config=NULL;
         DRSVR_COALESCE = 0;
+        //drsvrObj = tempObj;
+
     }
-    warp_inst_t( const core_config *config ) 
+    warp_inst_t( const core_config *config)
     { 
         m_uid=0;
         assert(config->warp_size<=MAX_WARP_SIZE); 
         m_config=config;
+        //drsvrObj = tempObj;
         m_empty=true; 
         m_isatomic=false;
         m_per_scalar_thread_valid=false;
         m_mem_accesses_created=false;
         m_cache_hit=false;
         m_is_printf=false;
+        DRSVR_COALESCE = 0;
     }
     virtual ~warp_inst_t(){
+        //printf("DRSVR! %u\n", DRSVR_COALESCE);
     }
 
     // modifiers
@@ -845,7 +908,7 @@ public:
     { 
         m_empty=true; 
     }
-    void issue( const active_mask_t &mask, unsigned warp_id, unsigned long long cycle, int dynamic_warp_id, unsigned sm_id )
+    void issue( const active_mask_t &mask, unsigned warp_id, unsigned long long cycle, int dynamic_warp_id, unsigned sm_id, DRSVR *drsvrObj)
     {
         m_warp_active_mask = mask;
         m_warp_issued_mask = mask; 
@@ -857,6 +920,7 @@ public:
         cycles = initiation_interval;
         m_cache_hit=false;
         m_empty=false;
+        smObj = drsvrObj;
     }
     const active_mask_t & get_active_mask() const
     {

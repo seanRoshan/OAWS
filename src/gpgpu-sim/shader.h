@@ -1567,6 +1567,7 @@ private:
 class shader_core_ctx : public core_t {
 public:
     // creator:
+    DRSVR *drsvrObj;
     shader_core_ctx( class gpgpu_sim *gpu,
                      class simt_core_cluster *cluster,
                      unsigned shader_id,

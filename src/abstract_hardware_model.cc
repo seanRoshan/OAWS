@@ -322,7 +322,10 @@ void warp_inst_t::generate_mem_accesses()
            }
            else{
                memory_coalescing_arch_13(is_write, access_type);
-               //printf("DRSVR: Coalesce_Arch13 called: %u\n", ++DRSVR_COALESCE);
+               if ( (DRSVR_COALESCE>1) && (!is_write) && (pc==272) && (m_sm_id==5) ) {
+                   printf("DRSVR: Coalesce_Arch13 returned! warpid: %u smid: %u pc: %u m_accessq_size: %u address: %u \n",
+                          m_warp_id, m_sm_id, pc, accessq_count(), address_t);
+               }
            }
 
         } else {
@@ -336,7 +339,10 @@ void warp_inst_t::generate_mem_accesses()
         abort();
     }
 
+
     if( cache_block_size ) {
+        //printf("DRSVR: m_accessq.empty()! warpid: %u smid: %u pc: %u m_accessq.empty(): %u address: %u \n",
+        //           m_warp_id, m_sm_id, pc, m_accessq.empty(), address_t);
         assert( m_accessq.empty() );
         mem_access_byte_mask_t byte_mask; 
         std::map<new_addr_type,active_mask_t> accesses; // block address -> set of thread offsets in warp
@@ -356,6 +362,12 @@ void warp_inst_t::generate_mem_accesses()
     }
 
     if ( space.get_type() == global_space ) {
+
+        if ( (DRSVR_COALESCE>1) && (!is_write) && (pc==272) && (m_sm_id==5) ) {
+            printf("DRSVR: GLOBAL_SPACE_uncoalesced_gmem! warpid: %u smid: %u pc: %u m_accessq_size: %u address: %u \n",
+                   m_warp_id, m_sm_id, pc, accessq_count(), address_t);
+        }
+
         ptx_file_line_stats_add_uncoalesced_gmem( pc, m_accessq.size() - starting_queue_size );
     }
     m_mem_accesses_created=true;
@@ -374,7 +386,12 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
     }
 
 
-    //printf("DRSVR segment_size: %u \n", segment_size);
+
+    if ( (!is_write) && (pc==272) && (m_sm_id==5) ) {
+        printf("\n---------------------------------------------------------------------------------\n");
+        printf("DRSVR: warp_parts: %u ; data_size: %u ; segment_size: %u ;\n", warp_parts, data_size, segment_size);
+    }
+
 
     unsigned subwarp_size = m_config->warp_size / warp_parts;
 
@@ -437,8 +454,18 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
             const transaction_info &info = t->second;
 
             ++DRSVR_COALESCE;
-            if (DRSVR_COALESCE>1) {
-                printf("DRSVR subwarp_transaction: %u warpid: %u pc: %u sid: %u\n", DRSVR_COALESCE, m_dynamic_warp_id, pc, m_sm_id);
+            smObj->updateWarpVector(warp_id());
+
+            printf("DRSVR_COALESCE: %u\n",DRSVR_COALESCE);
+            if ( (!is_write) && (pc==272) && (m_sm_id==5) ) {
+                printf("DRSVR subwarp_transaction_load: %u warpid: %u pc: %u sid: %u address: %u info: %s\n"
+                        , DRSVR_COALESCE
+                        , m_warp_id
+                        , pc
+                        , m_sm_id
+                        , (*t).first
+                        , (*t).second.chunks.to_string().c_str());
+                //printf("DRSVR memory_coalescing_arch_13_reduce_and_send: %u info: %s\n", ++DRSVR_COALESCE, (*t).chunks.to_string().c_str());
             }
             memory_coalescing_arch_13_reduce_and_send(is_write, access_type, info, addr, segment_size);
 
@@ -516,7 +543,8 @@ void warp_inst_t::memory_coalescing_arch_13_atomic( bool is_write, mem_access_ty
            for(t=transaction_list.begin(); t!=transaction_list.end(); t++) {
                // For each transaction
                const transaction_info &info = *t;
-               printf("DRSVR memory_coalescing_arch_13_reduce_and_send: %u\n", ++DRSVR_COALESCE);
+
+               printf("DRSVR memory_coalescing_arch_13_reduce_and_send: %u info: %s\n", ++DRSVR_COALESCE, (*t).chunks.to_string().c_str());
                memory_coalescing_arch_13_reduce_and_send(is_write, access_type, info, addr, segment_size);
            }
        }
@@ -528,6 +556,14 @@ void warp_inst_t::memory_coalescing_arch_13_reduce_and_send( bool is_write, mem_
    assert( (addr & (segment_size-1)) == 0 );
 
    const std::bitset<4> &q = info.chunks;
+
+   /*
+   if ( (DRSVR_COALESCE>1) && (!is_write) && (pc==272) && (m_sm_id==5) ) {
+       printf("DRSVR: info.chunks: %u! warpid: %u smid: %u pc: %u m_accessq_size: %u address: %u \n", info.chunks,
+              m_warp_id, m_sm_id, pc, address_t);
+   }
+   */
+
    assert( q.count() >= 1 );
    std::bitset<2> h; // halves (used to check if 64 byte segment can be compressed into a single 32 byte segment)
 
