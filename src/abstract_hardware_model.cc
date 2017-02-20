@@ -371,6 +371,13 @@ void warp_inst_t::generate_mem_accesses()
         ptx_file_line_stats_add_uncoalesced_gmem( pc, m_accessq.size() - starting_queue_size );
     }
     m_mem_accesses_created=true;
+
+    //smObj->print_histogram_warp_parts(m_warp_id);
+    if ( (m_warp_id == 0) && (m_sm_id == 5) ){
+        smObj->print_histogram(m_warp_id, "warp_parts");
+        smObj->print_histogram(m_warp_id, "data_size");
+        smObj->print_histogram(m_warp_id, "segment_size");
+    }
 }
 
 void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type access_type )
@@ -385,7 +392,11 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
     case 4: case 8: case 16: segment_size = 128; break;
     }
 
+    //smObj->update_histogram_warp_parts(warp_parts, m_warp_id);
 
+    smObj->update_histogram(m_warp_id, "warp_parts", warp_parts);
+    smObj->update_histogram(m_warp_id, "data_size", data_size);
+    smObj->update_histogram(m_warp_id, "segment_size", segment_size);
 
     if ( (!is_write) && (pc==272) && (m_sm_id==5) ) {
         printf("\n---------------------------------------------------------------------------------\n");
@@ -454,9 +465,9 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
             const transaction_info &info = t->second;
 
             ++DRSVR_COALESCE;
-            smObj->updateWarpVector(warp_id());
+            //smObj->updateWarpVector(warp_id());
 
-            printf("DRSVR_COALESCE: %u\n",DRSVR_COALESCE);
+            //printf("DRSVR_COALESCE: %u\n",DRSVR_COALESCE);
             if ( (!is_write) && (pc==272) && (m_sm_id==5) ) {
                 printf("DRSVR subwarp_transaction_load: %u warpid: %u pc: %u sid: %u address: %u info: %s\n"
                         , DRSVR_COALESCE

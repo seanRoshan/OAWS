@@ -710,53 +710,240 @@ struct dram_callback_t {
 };
 
 
+class Histogram {
+
+private:
+
+    std::vector<unsigned> histogramVector;
+    std::vector<unsigned> histogramCounterVector;
+
+    std::string histogramName;
+
+    unsigned h_sm_id;
+    unsigned h_warp_id;
+
+
+public:
+
+    Histogram(std::string inputName, unsigned input_sm_id , unsigned input_warp_id) {
+
+        this->histogramName = inputName;
+        this->h_sm_id = input_sm_id;
+        this->h_warp_id = input_warp_id;
+
+        this->reset_histogram();
+
+        //printf("INSIDE DRSVR %s Histogram : h_sm_id: %u ; h_warp_id: %u ;\n", histogramName.c_str(), h_sm_id, h_warp_id);
+
+    }
+
+    void update_histogram (unsigned input_data) {
+
+        bool matched = false;
+
+        for (unsigned i=0; i<histogramVector.size(); i++) {
+
+            assert(matched==false);
+
+            if (histogramVector.at(i)==input_data) {
+                histogramCounterVector.at(i)++;
+                matched = true;
+                break;
+            }
+
+        }
+
+        if (!matched) {
+
+            assert(matched==false);
+
+            histogramVector.push_back(input_data);
+            histogramCounterVector.push_back(1);
+        }
+
+    }
+
+    void reset_histogram () {
+
+        if (histogramVector.size()>0) {
+            assert(histogramVector.size() == histogramCounterVector.size());
+            this->histogramCounterVector.clear();
+            this->histogramCounterVector.clear();
+        }
+
+    }
+
+    void print_histogram () {
+
+        assert(histogramCounterVector.size() == histogramVector.size());
+
+        if (histogramVector.size()>0) {
+
+            char headerBuffer [100];
+
+            unsigned headerSize = sprintf(headerBuffer,"######################### DRSVR - [SM: %u ; WARP: %u] - %s #########################\n"
+                    , this->h_sm_id
+                    , this->h_warp_id
+                    , histogramName.c_str());
+
+
+            printf("######################### DRSVR - [SM: %u ; WARP: %u] - %s #########################\n"
+                    , this->h_sm_id
+                    , this->h_warp_id
+                    , histogramName.c_str());
+            for (unsigned i=0; i<histogramVector.size(); i++){
+                printf("%s[%u] : %u\n"
+                        , histogramName.c_str()
+                        , histogramVector.at(i)
+                        , histogramCounterVector.at(i));
+            }
+
+            for (unsigned i=0; i<headerSize-1; i++){
+                printf("#");
+            }
+
+            printf("\n\n");
+
+        }
+
+    }
+
+};
+
+class DRSVRSTATS {
+
+private:
+
+    std::vector<std::string> stats_name_vector;
+    std::vector<Histogram*> stats_obj_vector;
+
+    unsigned  s_sm_id;
+    unsigned  s_warp_id;
+
+    Histogram* create_new_histogram_obj (std::string myHistogramName) {
+        Histogram *warp_parts_obj = new Histogram(myHistogramName, s_sm_id, s_warp_id);
+        return (warp_parts_obj);
+    }
+
+    unsigned get_last_element_index() {
+        if (this->stats_name_vector.size()>0){
+            return (this->stats_name_vector.size()-1);
+        }
+    }
+
+    unsigned get_stat_vector_size() {
+        assert(stats_name_vector.size()==stats_obj_vector.size());
+        return (this->stats_name_vector.size());
+    }
+
+    unsigned search_histogram(std::string myStatName) {
+
+        unsigned index = this->get_stat_vector_size();
+
+        for (unsigned i=0; i<stats_name_vector.size(); i++){
+            if (stats_name_vector.at(i)==myStatName){
+                index = i;
+                break;
+            }
+        }
+        return index ;
+    }
+
+    bool find_histogram(std::string myStatName){
+
+        unsigned statVectorSize = this->get_stat_vector_size();
+        unsigned foundIndex = this->search_histogram(myStatName);
+
+        if (foundIndex == statVectorSize){
+            return false;
+        }
+        else {
+            return true;
+        }
+
+    }
+
+public:
+
+    DRSVRSTATS (unsigned sm_id_input, unsigned warp_id_input) {
+        s_sm_id = sm_id_input;
+        s_warp_id = warp_id_input;
+    }
+
+    void update_histogram(std::string histogramName_input, unsigned input_data){
+
+        unsigned statVectorSize = this->get_stat_vector_size();
+        unsigned foundIndex = this->search_histogram(histogramName_input);
+
+        if (foundIndex == statVectorSize){
+            // Create a new Histogram
+            this->stats_name_vector.push_back(histogramName_input);
+            this->stats_obj_vector.push_back(this->create_new_histogram_obj(histogramName_input));
+            foundIndex = get_last_element_index();
+        }
+
+        // Update an existing histogram
+        this->stats_obj_vector.at(foundIndex)->update_histogram(input_data);
+
+    }
+
+    void print_histogram (std::string histogramName_input){
+
+        unsigned statVectorSize = this->get_stat_vector_size();
+        unsigned foundIndex = this->search_histogram(histogramName_input);
+
+        if (foundIndex != statVectorSize){
+            this->stats_obj_vector.at(foundIndex)->print_histogram();
+        }
+
+    }
+
+    void reset_histogram (std::string histogramName_input){
+
+        unsigned statVectorSize = this->get_stat_vector_size();
+        unsigned foundIndex = this->search_histogram(histogramName_input);
+
+        if (foundIndex != statVectorSize){
+            this->stats_obj_vector.at(foundIndex)->reset_histogram();
+        }
+
+    }
+
+};
+
+
 
 class DRSVR {
 
 private:
-        unsigned x;
+        unsigned d_sm_id;
 
         const unsigned warpPerSM = 24;
 
-        std::vector<unsigned> warpVector;
+        std::vector<DRSVRSTATS*> stats_obj_vector;
+
 
 public:
 
-    DRSVR() {
-        x = 0;
-        // 24 is the number of warps in each scheduler
-        for (unsigned i=0; i<warpPerSM; i++) {
-            warpVector.push_back(0);
+    DRSVR(unsigned input_sm_id) {
+
+        d_sm_id = input_sm_id;
+
+        for (unsigned d_warp_id=0; d_warp_id<warpPerSM; d_warp_id++) {
+
+            DRSVRSTATS *statsObj_temp = new DRSVRSTATS(d_sm_id, d_warp_id);
+            stats_obj_vector.push_back(statsObj_temp);
+
         }
 
     }
 
-    void updateWarpVector(unsigned warpID) {
-        assert( (warpID<warpPerSM) && (warpID>=0) );
-        warpVector.at(warpID)++;
+    void update_histogram(unsigned input_warp_id, std::string histogramName, unsigned input_data){
+        stats_obj_vector.at(input_warp_id)->update_histogram(histogramName, input_data);
     }
 
-    void printWarpVector() {
-        
-        printf("***************************************************************************************\n");
-        for (unsigned i=0; i<warpPerSM; i++ ) {
-            if (warpVector.at(i)!=0){
-                printf("WARP[%u] = %u \n" ,i ,warpVector.at(i));
-            }
-        }
-        printf("***************************************************************************************\n");
-    }
-
-    void incX () {
-            x++;
-        }
-
-    unsigned getX(){
-        return x;
-    }
-
-    void printX () {
-        printf("DRSVR X VALUE: %u", x);
+    void print_histogram(unsigned input_warp_id, std::string histogramName){
+        stats_obj_vector.at(input_warp_id)->print_histogram(histogramName);
     }
 
 };
@@ -767,8 +954,6 @@ class inst_t {
 public:
 
     unsigned  DRSVR_COALESCE;
-
-
 
     DRSVR *smObj;
 

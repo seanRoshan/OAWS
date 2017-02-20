@@ -317,7 +317,7 @@ void shader_core_ctx::reinit(unsigned start_thread, unsigned end_thread, bool re
 void shader_core_ctx::init_warps( unsigned cta_id, unsigned start_thread, unsigned end_thread )
 {
 
-    drsvrObj = new DRSVR();
+    drsvrObj = new DRSVR(m_sid);
 
     address_type start_pc = next_pc(start_thread);
     if (m_config->model == POST_DOMINATOR) {
@@ -716,7 +716,7 @@ void shader_core_ctx::issue_warp( register_set& pipe_reg_set, const warp_inst_t*
     m_scoreboard->reserveRegisters(*pipe_reg);
     m_warp[warp_id].set_next_pc(next_inst->pc + next_inst->isize);
 
-    drsvrObj->printWarpVector();
+    //drsvrObj->printWarpVector();
 }
 
 void shader_core_ctx::issue(){
