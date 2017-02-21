@@ -922,12 +922,16 @@ private:
 
         std::vector<DRSVRSTATS*> stats_obj_vector;
 
+        DRSVRSTATS *global_stats_obj;
+
 
 public:
 
     DRSVR(unsigned input_sm_id) {
 
         d_sm_id = input_sm_id;
+
+        global_stats_obj = new DRSVRSTATS(d_sm_id, warpPerSM);
 
         for (unsigned d_warp_id=0; d_warp_id<warpPerSM; d_warp_id++) {
 
@@ -940,10 +944,15 @@ public:
 
     void update_histogram(unsigned input_warp_id, std::string histogramName, unsigned input_data){
         stats_obj_vector.at(input_warp_id)->update_histogram(histogramName, input_data);
+        global_stats_obj->update_histogram(histogramName, input_data);
     }
 
     void print_histogram(unsigned input_warp_id, std::string histogramName){
         stats_obj_vector.at(input_warp_id)->print_histogram(histogramName);
+    }
+
+    void print_histogram_global(std::string histogramName){
+        global_stats_obj->print_histogram(histogramName);
     }
 
 };

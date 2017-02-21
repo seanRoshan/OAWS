@@ -717,6 +717,10 @@ void shader_core_ctx::issue_warp( register_set& pipe_reg_set, const warp_inst_t*
     m_warp[warp_id].set_next_pc(next_inst->pc + next_inst->isize);
 
     //drsvrObj->printWarpVector();
+    if (m_sid==5){
+        //drsvrObj->print_histogram(warp_id,"subwarp_size");
+        //drsvrObj->print_histogram_global("subwarp_size");
+    }
 }
 
 void shader_core_ctx::issue(){
@@ -1121,6 +1125,8 @@ void scheduler_unit::cycle()
         m_stats->shader_cycle_distro[1]++; // waiting for RAW hazards (possibly due to memory) 
     else if( !issued_inst ) 
         m_stats->shader_cycle_distro[2]++; // pipeline stalled
+
+
 }
 
 void scheduler_unit::do_on_warp_issued( unsigned warp_id,
