@@ -415,7 +415,7 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
 
     if ( (m_sm_id==5) && (m_warp_id==0)) {
         //if ( (!is_write) && (pc==272) && (m_sm_id==5) ) {
-        printf("\n---------------------------------------------------------------------------------\n");
+        printf("\n##########################################################################################\n");
         printf("DRSVR: warp_parts: %u ; data_size: %u ; segment_size: %u ; subwarp_size: %u active_mask: %s ;\n"
                 , warp_parts, data_size, segment_size, subwarp_size, m_warp_active_mask.to_string().c_str());
     }
@@ -481,7 +481,20 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
 
                 unsigned chunk = (addr&127)/32; // which 32-byte chunk within in a 128-byte chunk does this thread access?
 
+                unsigned test1 = subwarp_transactions.size();
                 transaction_info &info = subwarp_transactions[block_address];
+                unsigned test2 = subwarp_transactions.size();
+
+                if ( (m_sm_id==5) && (m_warp_id==0) && (test1!=test2)) {
+                    printf("\n------------------------------------------------------------------------------\nDRSVR Creating new transaction for Block_Address:%u ; Offset_Address:%u ; Chunk:%u ; \n"
+                            , block_address, (addr&127), (addr&127)/32);
+                }
+                else if ( (m_sm_id==5) && (m_warp_id==0) && (test1==test2) ) {
+                    printf("\nDRSVR Updating the transaction for Block_Address:%u ; Offset_Address:%u ; Chunk:%u ; \n"
+                            , block_address, (addr&127), (addr&127)/32);
+                }
+
+
                 //printf("DRSVR subwarp_transactions.size(): %u warpid: %u pc: %u sid: %u\n", subwarp_transactions.size() , m_dynamic_warp_id, pc, m_sm_id);
 
                 // can only write to one segment
@@ -490,8 +503,21 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
                 info.chunks.set(chunk);
                 info.active.set(thread);
                 unsigned idx = (addr&127);
+
+
                 for( unsigned i=0; i < data_size_coales; i++ )
                     info.bytes.set(idx+i);
+
+                if ( (m_sm_id==5) && (m_warp_id==0)) {
+
+                    printf("DRSVR BlockAddress#: %u ;  chuncks : %s ; active: %s ; bytes: %s ;\n"
+                            , block_address
+                            , info.chunks.to_string().c_str()
+                            , info.active.to_string().c_str()
+                            , info.bytes.to_string().c_str());
+                }
+
+
             }
         }
 
@@ -506,8 +532,8 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
 
             //printf("DRSVR_COALESCE: %u\n",DRSVR_COALESCE);
             //if ( (!is_write) && (pc==272) && (m_sm_id==5) (segment_size==128) ) {
-            if ( (m_sm_id==5) && (m_warp_id==5) && (segment_size==128) ) {
-                printf("DRSVR subwarp_transaction_load: %u warpid: %u pc: %u sid: %u address: %u info: %s segmentSize: %u\n"
+            if ( (m_sm_id==5) && (m_warp_id==0) ) {
+                printf("DRSVR subwarp_transaction_load#: %u warpid: %u pc: %u sid: %u address: %u info: %s segment_Size %u\n"
                         , DRSVR_COALESCE
                         , m_warp_id
                         , pc

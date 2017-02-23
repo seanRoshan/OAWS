@@ -808,6 +808,92 @@ public:
 
     }
 
+
+
+};
+
+struct dlcEntry {
+    unsigned PC;
+    unsigned instCounter;
+    unsigned accCounter;
+    unsigned setCounter;
+
+    dlcEntry(unsigned input_PC, unsigned accCount, unsigned setCount){
+        PC = input_PC;
+        instCounter = 1;
+        accCounter = accCount;
+        setCounter = setCount;
+    }
+};
+
+class DLC {
+
+private:
+
+    unsigned numberOfSets;
+    unsigned numberOfWays;
+
+    std::map<unsigned,dlcEntry*> dlcTable;
+
+
+    
+    void update_inst(unsigned input_PC) {
+        dlcTable.at(input_PC)->instCounter++;
+    }
+
+
+    void update_acc (unsigned input_PC, unsigned transaction_count){
+        dlcTable.at(input_PC)->accCounter+=transaction_count;
+    }
+
+    void update_set (unsigned input_PC, unsigned set_count){
+        dlcTable.at(input_PC)->setCounter+=set_count;
+    }
+
+
+    bool findPC (unsigned input_pc) {
+
+        std::map<unsigned,dlcEntry*>::iterator it = dlcTable.find(input_pc);
+
+        if (it != dlcTable.end()){
+            return  true;
+        }
+        else {
+            return false;
+        }
+
+    }
+
+    unsigned calculateSet (unsigned block_address){
+
+        unsigned set = 0;
+
+        return set;
+    }
+
+
+public:
+
+    DLC() {
+        printf("DLC HAS BEEN CREATED!");
+    }
+
+    void update_DLC (unsigned input_pc, unsigned transaction_count, unsigned block_Address ){
+        bool pcFound = findPC(input_pc);
+
+        if (pcFound){
+
+            update_inst(input_pc);
+            update_acc(input_pc,transaction_count);
+            update_set(input_pc,calculateSet(block_Address));
+        }
+        else {
+            dlcEntry *test = new dlcEntry(input_pc, transaction_count, calculateSet(block_Address));
+            dlcTable[input_pc] = test;
+        }
+    }
+
+
 };
 
 class DRSVRSTATS {
