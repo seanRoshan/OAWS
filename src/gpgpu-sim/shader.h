@@ -1257,6 +1257,9 @@ struct shader_core_config : public core_config
         m_L1D_config.init(m_L1D_config.m_config_string,FuncCachePreferNone);
         gpgpu_cache_texl1_linesize = m_L1T_config.get_line_sz();
         gpgpu_cache_constl1_linesize = m_L1C_config.get_line_sz();
+        gpgpu_cache_dl1_setnumber = m_L1D_config.get_nset();
+        gpgpu_cache_dl1_setnumberlog2 = m_L1D_config.get_nset_log2();
+
         m_valid = true;
     }
     void reg_options(class OptionParser * opp );
@@ -1286,6 +1289,7 @@ struct shader_core_config : public core_config
     mutable cache_config m_L1T_config;
     mutable cache_config m_L1C_config;
     mutable l1d_cache_config m_L1D_config;
+
 
     bool gmem_skip_L1D; // on = global memory access always skip the L1 cache 
     

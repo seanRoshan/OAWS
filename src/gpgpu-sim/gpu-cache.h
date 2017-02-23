@@ -221,6 +221,18 @@ public:
         default: exit_parse_error();
         }
     }
+
+    // DRSVR GET NUMBER OF SET
+
+    unsigned get_nset(){
+        return m_nset;
+    }
+
+    unsigned get_nset_log2(){
+        return m_nset_log2;
+    }
+
+
     bool disabled() const { return m_disabled;}
     unsigned get_line_sz() const
     {

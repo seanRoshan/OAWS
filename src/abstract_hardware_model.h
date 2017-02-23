@@ -288,6 +288,10 @@ struct core_config {
     unsigned gpgpu_cache_texl1_linesize;
     unsigned gpgpu_cache_constl1_linesize;
 
+    // DRSVR data cache set info
+    unsigned gpgpu_cache_dl1_setnumber;
+    unsigned gpgpu_cache_dl1_setnumberlog2;
+
 	unsigned gpgpu_max_insn_issue_per_warp;
 };
 
@@ -818,6 +822,7 @@ struct dlcEntry {
     unsigned accCounter;
     unsigned setCounter;
 
+
     dlcEntry(unsigned input_PC, unsigned accCount, unsigned setCount){
         PC = input_PC;
         instCounter = 1;
@@ -831,9 +836,16 @@ class DLC {
 private:
 
     unsigned numberOfSets;
-    unsigned numberOfWays;
+    unsigned numberOfSetsLog2;
+    unsigned wordSize;
+    unsigned numberOfOffsetLog2;
+    unsigned setMask;
+
+    unsigned tempPC;
 
     std::map<unsigned,dlcEntry*> dlcTable;
+
+    std::vector<unsigned> transaction_history_vector;
 
 
     
@@ -864,33 +876,163 @@ private:
 
     }
 
+    void update_transaction_history (std::vector<unsigned> transaction_vector_in){
+        for (unsigned i=0; i<transaction_vector_in.size(); i++){
+            transaction_history_vector.push_back(transaction_vector_in.at(i));
+        }
+    }
+
+    void initialize_setMask(){
+
+        //printf("Initialize setMask\n");
+
+        unsigned offsetBits = 0;
+        unsigned tempWordSize = wordSize;
+
+        while (true){
+            tempWordSize = tempWordSize / 2 ;
+            if (tempWordSize == 0){
+                break;
+            }
+            offsetBits++;
+        }
+
+        numberOfOffsetLog2 = offsetBits;
+
+        unsigned setBits = numberOfSetsLog2;  // Number of bits for indexing sets inside the address
+
+        unsigned boundBits = setBits+offsetBits; // Offsetbit + SetBit
+
+        unsigned bitIndex = 0;
+
+        setMask = 0;
+
+        unsigned pow2 = 1;
+
+        while (true){
+
+            if (bitIndex>=offsetBits){
+                if (bitIndex<boundBits){
+                    setMask = setMask + pow2;
+                    //printf("DRSVR setMask: %u;\n",setMask);
+                    //printf("setMask:%u ; pow2:%u ; \n", setMask, pow2);
+                }
+                else {
+                    break;
+                }
+
+            }
+
+            pow2 = pow2 * 2;
+            bitIndex++;
+
+        }
+
+    }
+
     unsigned calculateSet (unsigned block_address){
 
-        unsigned set = 0;
+        unsigned set = block_address&(setMask);
+
+        set = set >> numberOfOffsetLog2;
+
+        //printf("Block_Address:%u ; setMask:%u ; set:%u \n", block_address, setMask, set);
+
+        assert(set<32);
 
         return set;
+
+
+    }
+
+    unsigned getSetsCount (std::vector<unsigned> input_Vector){
+
+        unsigned setCount = 0;
+
+        std::bitset<32> sets_Bitset;
+
+
+        for (unsigned i=0; i<input_Vector.size(); i++){
+            unsigned testSet = calculateSet(input_Vector.at(i));
+
+            sets_Bitset.set(testSet);
+
+            //printf("DRSVR-DLC PC:%u ; Address:%u ; testSet:%u ; bitSet:%s setCount:%u ;\n"
+            //        ,tempPC , input_Vector.at(i), testSet, sets_Bitset.to_string().c_str(), setCount );
+
+        }
+
+        if (sets_Bitset.size()>0){
+            setCount = sets_Bitset.count();
+        }
+
+        //printf("DRSVR-DLC bitSet:%s setCount:%u ;\n"
+        //        , sets_Bitset.to_string().c_str(), setCount );
+
+        return  setCount;
+
+
     }
 
 
 public:
 
-    DLC() {
-        printf("DLC HAS BEEN CREATED!");
+    DLC(unsigned cache_set_number, unsigned cache_set_number_log2, unsigned word_size_in) {
+        numberOfSets = cache_set_number;
+        numberOfSetsLog2 = cache_set_number_log2;
+        wordSize = word_size_in;
+        initialize_setMask();
+        printf("DLC HAS BEEN CREATED!\n #Sets: %u ; #setBits: %u ; wordSize: %u; setMask: %u\n"
+                , numberOfSets, numberOfSetsLog2, wordSize, setMask);
     }
 
-    void update_DLC (unsigned input_pc, unsigned transaction_count, unsigned block_Address ){
+    void update_DLC (unsigned input_pc, std::vector<unsigned> transaction_vector ){
+
+        tempPC = input_pc;
+
+        update_transaction_history(transaction_vector);
+
+        unsigned transaction_count = transaction_vector.size();
         bool pcFound = findPC(input_pc);
 
         if (pcFound){
 
             update_inst(input_pc);
             update_acc(input_pc,transaction_count);
-            update_set(input_pc,calculateSet(block_Address));
+            update_set(input_pc,getSetsCount(transaction_vector));
         }
         else {
-            dlcEntry *test = new dlcEntry(input_pc, transaction_count, calculateSet(block_Address));
+            dlcEntry *test = new dlcEntry(input_pc, transaction_count, getSetsCount(transaction_vector));
             dlcTable[input_pc] = test;
         }
+    }
+
+    void print_DLC(){
+
+        printf("|           PC           |           #INST           |           #ACC           |           #SETS           |\n");
+        printf("-------------------------------------------------------------------------------------------------------------\n");
+
+        for (std::map<unsigned,dlcEntry*>::iterator it = dlcTable.begin(); it!=dlcTable.end(); ++it){
+            printf("|           %u           |           %u           |           %u           |           %u           |\n"
+                    ,it->first, it->second->instCounter, it->second->accCounter, it->second->setCounter);
+        }
+
+        printf("-------------------------------------------------------------------------------------------------------------\n");
+
+    }
+
+    void print_transactions_history(){
+        unsigned setCount_Sum = 0;
+        printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n");
+        printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$DRSVR DLC TRANSACTION HISTORY$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n");
+        printf("-----------------------------------------------------------------------------------------\n");
+        printf("wordSize: %u ; OffsetBits: %u ; setBits: %u; setMask: %u;\n",wordSize, numberOfOffsetLog2, numberOfSetsLog2, setMask );
+        printf("-----------------------------------------------------------------------------------------\n");
+        for (unsigned i=0; i<transaction_history_vector.size(); i++ ) {
+            setCount_Sum += calculateSet(transaction_history_vector.at(i));
+            printf("Transaction: %u ; Set: %u  ;\n",transaction_history_vector.at(i), calculateSet(transaction_history_vector.at(i)));
+        }
+        printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n");
     }
 
 
@@ -995,6 +1137,10 @@ public:
 
     }
 
+
+
+
+
 };
 
 
@@ -1010,6 +1156,8 @@ private:
 
         DRSVRSTATS *global_stats_obj;
 
+        DLC *global_dlc_obj;
+
 
 public:
 
@@ -1018,6 +1166,8 @@ public:
         d_sm_id = input_sm_id;
 
         global_stats_obj = new DRSVRSTATS(d_sm_id, warpPerSM);
+
+        global_dlc_obj = new DLC(32,5,128);             // DRSVR WARNING: You should add parameters instead of constants
 
         for (unsigned d_warp_id=0; d_warp_id<warpPerSM; d_warp_id++) {
 
@@ -1039,6 +1189,18 @@ public:
 
     void print_histogram_global(std::string histogramName){
         global_stats_obj->print_histogram(histogramName);
+    }
+
+    void update_dlc_table (unsigned input_pc, std::vector<unsigned> transaction_vector ){
+       global_dlc_obj->update_DLC(input_pc, transaction_vector);
+    }
+
+    void print_dlc_table(){
+        global_dlc_obj->print_DLC();
+    }
+
+    void print_dlc_transaction_history(){
+        global_dlc_obj->print_transactions_history();
     }
 
 };
