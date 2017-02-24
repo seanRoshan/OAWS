@@ -982,7 +982,7 @@ public:
         numberOfSetsLog2 = cache_set_number_log2;
         wordSize = word_size_in;
         initialize_setMask();
-        printf("DLC HAS BEEN CREATED!\n #Sets: %u ; #setBits: %u ; wordSize: %u; setMask: %u\n"
+        printf("DLC HAS BEEN CREATED!\t #Sets: %u ; #setBits: %u ; wordSize: %u; setMask: %u\n"
                 , numberOfSets, numberOfSetsLog2, wordSize, setMask);
     }
 
@@ -1009,6 +1009,7 @@ public:
 
     void print_DLC(){
 
+        printf("-------------------------------------------------------------------------------------------------------------\n");
         printf("|           PC           |           #INST           |           #ACC           |           #SETS           |\n");
         printf("-------------------------------------------------------------------------------------------------------------\n");
 
@@ -1192,7 +1193,9 @@ public:
     }
 
     void update_dlc_table (unsigned input_pc, std::vector<unsigned> transaction_vector ){
-       global_dlc_obj->update_DLC(input_pc, transaction_vector);
+        if (transaction_vector.size()>1) { // Divergent Load
+            global_dlc_obj->update_DLC(input_pc, transaction_vector);
+        }
     }
 
     void print_dlc_table(){

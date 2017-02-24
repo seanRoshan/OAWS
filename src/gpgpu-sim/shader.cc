@@ -76,6 +76,13 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
      m_barriers( this, config->max_warps_per_shader, config->max_cta_per_core, config->max_barriers_per_cta, config->warp_size ),
      m_dynamic_warp_id(0)
 {
+
+    // DRSVR TEST SHADER CREATION:
+
+    //printf("HELLODRSVR! SHADER #%u have been created!\n",shader_id);
+    drsvrObj = new DRSVR(shader_id);
+
+
     m_cluster = cluster;
     m_config = config;
     m_memory_config = mem_config;
@@ -317,7 +324,7 @@ void shader_core_ctx::reinit(unsigned start_thread, unsigned end_thread, bool re
 void shader_core_ctx::init_warps( unsigned cta_id, unsigned start_thread, unsigned end_thread )
 {
 
-    drsvrObj = new DRSVR(m_sid);
+    //drsvrObj = new DRSVR(m_sid);
 
     address_type start_pc = next_pc(start_thread);
     if (m_config->model == POST_DOMINATOR) {
