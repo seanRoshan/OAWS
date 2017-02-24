@@ -364,6 +364,36 @@ bool mshr_table::full( new_addr_type block_addr ) const{
         return m_data.size() >= m_num_entries;
 }
 
+/// DRSVR : Return available mshr entries
+unsigned mshr_table::get_available_count () {
+    if (m_data.size() < m_num_entries){
+        if (m_num_entries==32){
+            printf("DRSVR MSHR L1 DATA CACHE: m_num_entries: %u ; m_data.size():%u ; m_max_merged:%u ;\n",m_num_entries, m_data.size(), m_max_merged);
+        }
+        else if (m_num_entries==2){
+            printf("DRSVR MSHR L1 INST or CONST CACHE: m_num_entries: %u ; m_data.size():%u ; m_max_merged:%u ;\n",m_num_entries, m_data.size(), m_max_merged);
+        }
+        else {
+            printf("DRSVR MSHR TEX: m_num_entries: %u ; m_data.size():%u ; m_max_merged:%u ;\n",m_num_entries, m_data.size(), m_max_merged);
+        }
+        return (m_num_entries - m_data.size());
+    }
+    else {
+        if (m_num_entries==32){
+            printf("DRSVR MSHR L1 DATA CACHE: m_num_entries: %u ; m_data.size():%u ; m_max_merged:%u ;\n",m_num_entries, m_data.size(), m_max_merged);
+        }
+        else if (m_num_entries==2){
+            printf("DRSVR MSHR L1 INST or CONST CACHE: m_num_entries: %u ; m_data.size():%u ; m_max_merged:%u ;\n",m_num_entries, m_data.size(), m_max_merged);
+        }
+        else {
+            printf("DRSVR MSHR TEX: m_num_entries: %u ; m_data.size():%u ; m_max_merged:%u ;\n",m_num_entries, m_data.size(), m_max_merged);
+        }
+        return 0;
+    }
+
+}
+
+
 /// Add or merge this access
 void mshr_table::add( new_addr_type block_addr, mem_fetch *mf ){
 	m_data[block_addr].m_list.push_back(mf);
@@ -414,6 +444,23 @@ void mshr_table::display( FILE *fp ) const{
         }
     }
 }
+
+void mshr_table::print() const{
+    printf("MSHR contents Size:%u\n", m_data.size());
+    printf("----------------------------------------------------------------------");
+    for ( table::const_iterator e=m_data.begin(); e!=m_data.end(); ++e ) {
+        unsigned block_addr = e->first;
+        printf("\nMSHR: tag=%u, atomic=%d %zu entries : ", block_addr, e->second.m_has_atomic, e->second.m_list.size());
+        if ( !e->second.m_list.empty() ) {
+            mem_fetch *mf = e->second.m_list.front();
+            printf("%p :",mf);
+            //mf->print(fp);
+        } else {
+            printf(" no memory requests???\n");
+        }
+    }
+}
+
 /***************************************************************** Caches *****************************************************************/
 cache_stats::cache_stats(){
     m_stats.resize(NUM_MEM_ACCESS_TYPE);
@@ -749,6 +796,20 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
 
     bool mshr_hit = m_mshrs.probe(block_addr);
     bool mshr_avail = !m_mshrs.full(block_addr);
+
+    if (!mshr_avail){
+        printf("######################################################################\n");
+        printf("MSHR N! TIME: %u AVAILABLE: %u\n",time, m_mshrs.get_available_count());
+        m_mshrs.print();
+        printf("\n######################################################################\n");
+    }
+    else {
+        printf("######################################################################\n");
+        printf("MSHR Y! TIME: %u AVAILABLE: %u\n",time, m_mshrs.get_available_count());
+        m_mshrs.print();
+        printf("\n######################################################################\n");
+    }
+
     if ( mshr_hit && mshr_avail ) {
     	if(read_only)
     		m_tag_array->access(block_addr,time,cache_index);

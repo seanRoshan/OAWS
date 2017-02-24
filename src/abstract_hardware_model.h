@@ -669,6 +669,23 @@ public:
        }
    }
 
+    void print2() const
+    {
+        printf("addr=0x%llx, %s, size=%u, ", m_addr, m_write?"store":"load ", m_req_size );
+        switch(m_type) {
+            case GLOBAL_ACC_R:  printf("GLOBAL_R"); break;
+            case LOCAL_ACC_R:   printf("LOCAL_R "); break;
+            case CONST_ACC_R:   printf("CONST   "); break;
+            case TEXTURE_ACC_R: printf("TEXTURE "); break;
+            case GLOBAL_ACC_W:  printf("GLOBAL_W"); break;
+            case LOCAL_ACC_W:   printf("LOCAL_W "); break;
+            case L2_WRBK_ACC:   printf("L2_WRBK "); break;
+            case INST_ACC_R:    printf("INST    "); break;
+            case L1_WRBK_ACC:   printf("L1_WRBK "); break;
+            default:            printf("unknown "); break;
+        }
+    }
+
 private:
    void init() 
    {

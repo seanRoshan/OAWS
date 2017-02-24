@@ -408,13 +408,14 @@ public:
 #if (tr1_hash_map_ismap == 0)
     ,m_data(2*num_entries)
 #endif
-    {
-    }
+    {}
 
     /// Checks if there is a pending request to the lower memory level already
     bool probe( new_addr_type block_addr ) const;
     /// Checks if there is space for tracking a new memory access
     bool full( new_addr_type block_addr ) const;
+    /// Return available mshr entries
+    unsigned get_available_count () ;
     /// Add or merge this access
     void add( new_addr_type block_addr, mem_fetch *mf );
     /// Returns true if cannot accept new fill responses
@@ -426,6 +427,7 @@ public:
     /// Returns next ready access
     mem_fetch *next_access();
     void display( FILE *fp ) const;
+    void print() const;
 
     void check_mshr_parameters( unsigned num_entries, unsigned max_merged )
     {
