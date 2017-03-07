@@ -402,11 +402,26 @@ protected:
 
 class mshr_table {
 public:
-    mshr_table( unsigned num_entries, unsigned max_merged )
+
+    DRSVR *smObj;
+    bool smObjLoaded = false;
+
+    mshr_table( unsigned num_entries, unsigned max_merged, DRSVR *drsvrObj_in)
     : m_num_entries(num_entries),
     m_max_merged(max_merged)
 #if (tr1_hash_map_ismap == 0)
     ,m_data(2*num_entries)
+#endif
+    {
+        smObj = drsvrObj_in;
+        smObjLoaded = true;
+    }
+
+    mshr_table( unsigned num_entries, unsigned max_merged)
+            : m_num_entries(num_entries),
+              m_max_merged(max_merged)
+#if (tr1_hash_map_ismap == 0)
+            ,m_data(2*num_entries)
 #endif
     {}
 
@@ -428,6 +443,7 @@ public:
     mem_fetch *next_access();
     void display( FILE *fp ) const;
     void print() const;
+    void print2() const;
 
     void check_mshr_parameters( unsigned num_entries, unsigned max_merged )
     {
@@ -563,12 +579,26 @@ bool was_read_sent( const std::list<cache_event> &events );
 /// Each subclass implements its own 'access' function
 class baseline_cache : public cache_t {
 public:
+
+    DRSVR *smObj;
+
     baseline_cache( const char *name, cache_config &config, int core_id, int type_id, mem_fetch_interface *memport,
                      enum mem_fetch_status status )
     : m_config(config), m_tag_array(new tag_array(config,core_id,type_id)), 
-      m_mshrs(config.m_mshr_entries,config.m_mshr_max_merge), 
+      m_mshrs(config.m_mshr_entries,config.m_mshr_max_merge),
       m_bandwidth_management(config) 
     {
+        init( name, config, memport, status );
+    }
+
+    baseline_cache( const char *name, cache_config &config, int core_id, int type_id, mem_fetch_interface *memport,
+                    enum mem_fetch_status status, DRSVR *smObj_in )
+            : m_config(config), m_tag_array(new tag_array(config,core_id,type_id)),
+              m_mshrs(config.m_mshr_entries,config.m_mshr_max_merge, smObj_in),
+              m_bandwidth_management(config)
+    {
+        smObj = smObj_in;
+
         init( name, config, memport, status );
     }
 
@@ -637,7 +667,7 @@ protected:
                     tag_array* new_tag_array )
     : m_config(config),
       m_tag_array( new_tag_array ),
-      m_mshrs(config.m_mshr_entries,config.m_mshr_max_merge), 
+      m_mshrs(config.m_mshr_entries,config.m_mshr_max_merge, smObj),
       m_bandwidth_management(config) 
     {
         init( name, config, memport, status );
@@ -735,8 +765,19 @@ public:
     data_cache( const char *name, cache_config &config,
     			int core_id, int type_id, mem_fetch_interface *memport,
                 mem_fetch_allocator *mfcreator, enum mem_fetch_status status,
-                mem_access_type wr_alloc_type, mem_access_type wrbk_type )
-    			: baseline_cache(name,config,core_id,type_id,memport,status)
+                mem_access_type wr_alloc_type, mem_access_type wrbk_type, DRSVR *smObj )
+    			: baseline_cache(name,config,core_id,type_id,memport,status, smObj )
+    {
+        init( mfcreator );
+        m_wr_alloc_type = wr_alloc_type;
+        m_wrbk_type = wrbk_type;
+    }
+
+    data_cache( const char *name, cache_config &config,
+                int core_id, int type_id, mem_fetch_interface *memport,
+                mem_fetch_allocator *mfcreator, enum mem_fetch_status status,
+                mem_access_type wr_alloc_type, mem_access_type wrbk_type)
+            : baseline_cache(name,config,core_id,type_id,memport,status)
     {
         init( mfcreator );
         m_wr_alloc_type = wr_alloc_type;
@@ -941,8 +982,8 @@ class l1_cache : public data_cache {
 public:
     l1_cache(const char *name, cache_config &config,
             int core_id, int type_id, mem_fetch_interface *memport,
-            mem_fetch_allocator *mfcreator, enum mem_fetch_status status )
-            : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC){}
+            mem_fetch_allocator *mfcreator, enum mem_fetch_status status, DRSVR* smObj )
+            : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L1_WR_ALLOC_R, L1_WRBK_ACC, smObj){}
 
     virtual ~l1_cache(){}
 

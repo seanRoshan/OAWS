@@ -1080,8 +1080,14 @@ class shader_core_mem_fetch_allocator;
 class cache_t;
 
 class ldst_unit: public pipelined_simd_unit {
+private:
+
+    bool smObjLoaded = false;
+    DRSVR *smObj;
+
+
 public:
-    ldst_unit( mem_fetch_interface *icnt,
+    ldst_unit(  mem_fetch_interface *icnt,
                shader_core_mem_fetch_allocator *mf_allocator,
                shader_core_ctx *core, 
                opndcoll_rfu_t *operand_collector,
@@ -1089,7 +1095,7 @@ public:
                const shader_core_config *config, 
                const memory_config *mem_config,  
                class shader_core_stats *stats, 
-               unsigned sid, unsigned tpc );
+               unsigned sid, unsigned tpc, DRSVR *drsvrObj);
 
     // modifiers
     virtual void issue( register_set &inst );
@@ -1098,6 +1104,19 @@ public:
     void fill( mem_fetch *mf );
     void flush();
     void writeback();
+
+    void load_smObj(DRSVR *drsvrObj){
+        if (smObjLoaded){
+            return;
+        }
+        smObj = drsvrObj;
+        smObjLoaded = true;
+    }
+
+    DRSVR* get_smObj(){
+        assert(smObjLoaded==true);
+        return (smObj);
+    }
 
     // accessors
     virtual unsigned clock_multiplier() const;

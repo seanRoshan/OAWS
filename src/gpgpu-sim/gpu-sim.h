@@ -212,9 +212,15 @@ struct memory_config {
       m_address_mapping.init(m_n_mem, m_n_sub_partition_per_memory_channel);
       m_L2_config.init(&m_address_mapping);
 
+
+
       m_valid = true;
       icnt_flit_size = 32; // Default 32
    }
+
+
+
+
    void reg_options(class OptionParser * opp);
 
    bool m_valid;
@@ -270,6 +276,22 @@ struct memory_config {
    linear_to_raw_address_translation m_address_mapping;
 
    unsigned icnt_flit_size;
+
+
+   /*
+   DRSVR *smObj;
+   bool smObj_Load = false;
+
+   void load_smObj(DRSVR *drsvrObj) {
+        smObj = drsvrObj;
+        smObj_Load = true;
+   }
+
+   DRSVR* get_smObj (){
+       assert(smObj_Load);
+       return (smObj);
+   }
+   */
 };
 
 // global counters and flags (please try not to add to this list!!!)

@@ -287,8 +287,9 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
         m_dispatch_port.push_back(ID_OC_SFU);
         m_issue_port.push_back(OC_EX_SFU);
     }
-    
-    m_ldst_unit = new ldst_unit( m_icnt, m_mem_fetch_allocator, this, &m_operand_collector, m_scoreboard, config, mem_config, stats, shader_id, tpc_id );
+
+    m_ldst_unit = new ldst_unit( m_icnt, m_mem_fetch_allocator, this, &m_operand_collector, m_scoreboard, config, mem_config, stats, shader_id, tpc_id, drsvrObj );
+
     m_fu.push_back(m_ldst_unit);
     m_dispatch_port.push_back(ID_OC_MEM);
     m_issue_port.push_back(OC_EX_MEM);
@@ -616,6 +617,8 @@ void shader_core_ctx::decode()
 
 void shader_core_ctx::fetch()
 {
+    //if (m_sid == 5) { printf("DRSVR shader_core_ctx: m_inst_fetch_buffer.m_valid! %d\n", m_inst_fetch_buffer.m_valid);}
+
     if( !m_inst_fetch_buffer.m_valid ) {
         // find an active warp with space in instruction buffer that is not already waiting on a cache miss
         // and get next 1-2 instructions from i-cache...
@@ -681,6 +684,8 @@ void shader_core_ctx::fetch()
         }
     }
 
+    //printf("DRSVR m_L1I: \n");
+
     m_L1I->cycle();
 
     if( m_L1I->access_ready() ) {
@@ -733,6 +738,9 @@ void shader_core_ctx::issue_warp( register_set& pipe_reg_set, const warp_inst_t*
 void shader_core_ctx::issue(){
     //really is issue;
     for (unsigned i = 0; i < schedulers.size(); i++) {
+
+        //if (m_sid == 5){  printf("DRSVR issue scheduler:> %d \n",i); }
+
         schedulers[i]->cycle();
     }
 }
@@ -1524,14 +1532,18 @@ bool ldst_unit::shared_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, 
    return !stall; 
 }
 
-mem_stage_stall_type
-ldst_unit::process_cache_access( cache_t* cache,
+mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
                                  new_addr_type address,
                                  warp_inst_t &inst,
                                  std::list<cache_event>& events,
                                  mem_fetch *mf,
                                  enum cache_request_status status )
 {
+    if (m_sid == 5) {
+        //printf("DRSVR: MF_SIZE() %d\n", mf->size());
+        //inst.smObj->print_dlc_table();
+    }
+
     mem_stage_stall_type result = NO_RC_FAIL;
     bool write_sent = was_write_sent(events);
     bool read_sent = was_read_sent(events);
@@ -1572,6 +1584,10 @@ mem_stage_stall_type ldst_unit::process_memory_access_queue( cache_t *cache, war
         return DATA_PORT_STALL; 
 
     //const mem_access_t &access = inst.accessq_back();
+
+    // DRSVR Print Accessq
+    if (m_sid==5) { inst.accessq_print(); }
+
     mem_fetch *mf = m_mf_allocator->alloc(inst,inst.accessq_back());
     std::list<cache_event> events;
     enum cache_request_status status = cache->access(mf->get_addr(),mf,gpu_sim_cycle+gpu_tot_sim_cycle,events);
@@ -1834,8 +1850,12 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
                       const memory_config *mem_config,  
                       shader_core_stats *stats,
                       unsigned sid,
-                      unsigned tpc ) : pipelined_simd_unit(NULL,config,3,core), m_next_wb(config)
+                      unsigned tpc, DRSVR *drsvrObj) : pipelined_simd_unit(NULL,config,3,core), m_next_wb(config)
 {
+    printf("DRSVR SM:%u ldst Constructor!\n", sid);
+    smObj = drsvrObj;
+    smObjLoaded = true;
+
     init( icnt,
           mf_allocator,
           core, 
@@ -1846,6 +1866,7 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
           stats, 
           sid,
           tpc );
+
     if( !m_config->m_L1D_config.disabled() ) {
         char L1D_name[STRSIZE];
         snprintf(L1D_name, STRSIZE, "L1D_%03d", m_sid);
@@ -1855,7 +1876,7 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
                               get_shader_normal_cache_id(),
                               m_icnt,
                               m_mf_allocator,
-                              IN_L1D_MISS_QUEUE );
+                              IN_L1D_MISS_QUEUE, this->get_smObj());
     }
 }
 
@@ -2030,6 +2051,7 @@ void ldst_unit::issue( register_set &reg_set )
 */
 void ldst_unit::cycle()
 {
+   //if (m_sid==5) { printf("DRSVR  ldst_unit!\n"); }
    writeback();
    m_operand_collector->step();
    for( unsigned stage=0; (stage+1)<m_pipeline_depth; stage++ ) 
@@ -2082,6 +2104,8 @@ void ldst_unit::cycle()
 
    m_L1T->cycle();
    m_L1C->cycle();
+
+
    if( m_L1D ) m_L1D->cycle();
 
    warp_inst_t &pipe_reg = *m_dispatch_reg;

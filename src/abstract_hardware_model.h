@@ -671,7 +671,8 @@ public:
 
     void print2() const
     {
-        printf("addr=0x%llx, %s, size=%u, ", m_addr, m_write?"store":"load ", m_req_size );
+        //printf("addr=0x%llx, %s, size=%u, ", m_addr, m_write?"store":"load ", m_req_size );
+        printf("addr=%u, %s, size=%u, ", m_addr, m_write?"store":"load ", m_req_size );
         switch(m_type) {
             case GLOBAL_ACC_R:  printf("GLOBAL_R"); break;
             case LOCAL_ACC_R:   printf("LOCAL_R "); break;
@@ -1488,6 +1489,18 @@ public:
     const mem_access_t &accessq_back() { return m_accessq.back(); }
     void accessq_pop_back() { m_accessq.pop_back(); }
 
+    void accessq_print(){
+        unsigned i = 0;
+        printf("\n------------------------------- Memory Access Queue --------------------------------\n");
+        for (std::list<mem_access_t>::iterator it=m_accessq.begin(); it != m_accessq.end(); ++it){
+            printf("m_queue[%u]: ",i);
+            (*it).print2();
+            printf("\n");
+            i++;
+        }
+        printf("------------------------------------------------------------------------------------\n");
+    }
+
     bool dispatch_delay()
     { 
         if( cycles > 0 ) 
@@ -1530,6 +1543,7 @@ protected:
     bool m_per_scalar_thread_valid;
     std::vector<per_thread_info> m_per_scalar_thread;
     bool m_mem_accesses_created;
+
     std::list<mem_access_t> m_accessq;
 
     static unsigned sm_next_uid;
