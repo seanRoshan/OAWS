@@ -1177,6 +1177,10 @@ private:
 
         DLC *global_dlc_obj;
 
+        unsigned missOnFlight;
+        unsigned availableMSHR;
+        bool  mshrStatsInitialized = false;
+
 
 public:
 
@@ -1217,11 +1221,43 @@ public:
     }
 
     void print_dlc_table(){
+        print_mshr_info();
         global_dlc_obj->print_DLC();
     }
 
     void print_dlc_transaction_history(){
         global_dlc_obj->print_transactions_history();
+    }
+
+    void update_availableMSHR (unsigned newAvailable){
+        availableMSHR = newAvailable;
+    }
+
+    unsigned get_availableMSHR (){
+        return (availableMSHR);
+    }
+
+    void update_missOnFlight (unsigned newMissOnFlight){
+        missOnFlight = newMissOnFlight;
+    }
+
+    unsigned get_missOnFlight(){
+        return missOnFlight;
+    }
+
+    void initialize_mshr_OAWS(unsigned available_in, unsigned missOnFlight_in){
+        assert(mshrStatsInitialized==false);
+        availableMSHR = available_in;
+        missOnFlight = missOnFlight_in;
+
+        printf("DRSVR MSHR OAWS STATUS HAS BEEN Initialized:> availableMSHR = %u ; missOnFlight = %u;\n"
+                , availableMSHR, missOnFlight);
+
+    }
+
+    void print_mshr_info(){
+        printf("DRSVR MSHR OAWS INFO: availableMSHR = %u ; missOnFlight = %u;\n"
+                , availableMSHR, missOnFlight);
     }
 
 };

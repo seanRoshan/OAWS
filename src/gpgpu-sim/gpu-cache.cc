@@ -480,6 +480,13 @@ void mshr_table::print2() const{
     }
 }
 
+void mshr_table::update_oaws_status(unsigned available_in, unsigned missOnFlight_in){
+    if (smObjLoaded){
+        smObj->update_availableMSHR(available_in);
+        smObj->update_missOnFlight(missOnFlight_in);
+    }
+}
+
 /***************************************************************** Caches *****************************************************************/
 cache_stats::cache_stats(){
     m_stats.resize(NUM_MEM_ACCESS_TYPE);
@@ -816,7 +823,7 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
     bool mshr_hit = m_mshrs.probe(block_addr);
     bool mshr_avail = !m_mshrs.full(block_addr);
 
-    ///* DRSVR
+    /* DRSVR
     if (!mshr_avail){
 
 
@@ -833,7 +840,7 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
         printf("\n######################################################################\n");
     }
 
-    //*/
+    */
 
     if ( mshr_hit && mshr_avail ) {
     	if(read_only)
@@ -858,6 +865,8 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
         	events.push_back(READ_REQUEST_SENT);
         do_miss = true;
     }
+
+    m_mshrs.update_oaws_status(m_mshrs.get_available_count(),m_miss_queue.size());
 }
 
 

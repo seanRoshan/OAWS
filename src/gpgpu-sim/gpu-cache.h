@@ -415,6 +415,7 @@ public:
     {
         smObj = drsvrObj_in;
         smObjLoaded = true;
+        smObj->initialize_mshr_OAWS(this->get_available_count(),0);
     }
 
     mshr_table( unsigned num_entries, unsigned max_merged)
@@ -444,6 +445,8 @@ public:
     void display( FILE *fp ) const;
     void print() const;
     void print2() const;
+
+    void update_oaws_status(unsigned available_in, unsigned missOnFlight_in);
 
     void check_mshr_parameters( unsigned num_entries, unsigned max_merged )
     {
