@@ -287,6 +287,7 @@ enum scheduler_prioritization_type
     SCHEDULER_PRIORITIZATION_LRR = 0, // Loose Round Robin
     SCHEDULER_PRIORITIZATION_SRR, // Strict Round Robin
     SCHEDULER_PRIORITIZATION_GTO, // Greedy Then Oldest
+    SCHEDULER_PRIORITIZATION_OAWS, // OAWS GTO
     SCHEDULER_PRIORITIZATION_GTLRR, // Greedy Then Loose Round Robin
     SCHEDULER_PRIORITIZATION_GTY, // Greedy Then Youngest
     SCHEDULER_PRIORITIZATION_OLDEST, // Oldest First
@@ -299,6 +300,7 @@ enum concrete_scheduler
 {
     CONCRETE_SCHEDULER_LRR = 0,
     CONCRETE_SCHEDULER_GTO,
+    CONCRETE_SCHEDULER_OAWS,
     CONCRETE_SCHEDULER_TWO_LEVEL_ACTIVE,
     CONCRETE_SCHEDULER_WARP_LIMITING,
     NUM_CONCRETE_SCHEDULERS
@@ -355,7 +357,10 @@ public:
                             unsigned num_warps_to_add,
                             OrderingType age_ordering,
                             bool (*priority_func)(U lhs, U rhs) );
+
+
     static bool sort_warps_by_oldest_dynamic_id(shd_warp_t* lhs, shd_warp_t* rhs);
+    static bool sort_warps_by_oldest_dynamic_id_oaws(shd_warp_t* lhs, shd_warp_t* rhs);
 
     // Derived classes can override this function to populate
     // m_supervised_warps with their scheduling policies
@@ -408,6 +413,24 @@ public:
     virtual void done_adding_supervised_warps() {
         m_last_supervised_issued = m_supervised_warps.end();
     }
+};
+
+class oaws_scheduler : public scheduler_unit {
+public:
+    oaws_scheduler ( shader_core_stats* stats, shader_core_ctx* shader,
+                    Scoreboard* scoreboard, simt_stack** simt,
+                    std::vector<shd_warp_t>* warp,
+                    register_set* sp_out,
+                    register_set* sfu_out,
+                    register_set* mem_out,
+                    int id )
+            : scheduler_unit ( stats, shader, scoreboard, simt, warp, sp_out, sfu_out, mem_out, id ){}
+    virtual ~oaws_scheduler () {}
+    virtual void order_warps ();
+    virtual void done_adding_supervised_warps() {
+        m_last_supervised_issued = m_supervised_warps.begin();
+    }
+
 };
 
 class gto_scheduler : public scheduler_unit {

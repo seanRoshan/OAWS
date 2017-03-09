@@ -138,6 +138,8 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
                                          CONCRETE_SCHEDULER_TWO_LEVEL_ACTIVE :
                                          sched_config.find("gto") != std::string::npos ?
                                          CONCRETE_SCHEDULER_GTO :
+                                         sched_config.find("oaws") != std::string::npos ?
+                                         CONCRETE_SCHEDULER_OAWS :
                                          sched_config.find("warp_limiting") != std::string::npos ?
                                          CONCRETE_SCHEDULER_WARP_LIMITING:
                                          NUM_CONCRETE_SCHEDULERS;
@@ -187,6 +189,20 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
                                        &m_pipeline_reg[ID_OC_MEM],
                                        i
                                      )
+                );
+                break;
+            case CONCRETE_SCHEDULER_OAWS:
+                schedulers.push_back(
+                        new oaws_scheduler( m_stats,
+                                           this,
+                                           m_scoreboard,
+                                           m_simt_stack,
+                                           &m_warp,
+                                           &m_pipeline_reg[ID_OC_SP],
+                                           &m_pipeline_reg[ID_OC_SFU],
+                                           &m_pipeline_reg[ID_OC_MEM],
+                                           i
+                        )
                 );
                 break;
             case CONCRETE_SCHEDULER_WARP_LIMITING:
@@ -811,7 +827,7 @@ void scheduler_unit::order_by_priority( std::vector< T >& result_list,
                                         bool (*priority_func)(T lhs, T rhs) )
 {
     assert( num_warps_to_add <= input_list.size() );
-    //printf("DRSVR input_list size:  %u\n", input_list.size());
+    printf("DRSVR input_list size:  %u ; num_warps_to_add: %u ;\n", input_list.size(), num_warps_to_add);
     result_list.clear();
 
     typename std::vector< T > temp = input_list;
@@ -820,7 +836,9 @@ void scheduler_unit::order_by_priority( std::vector< T >& result_list,
         T greedy_value = *last_issued_from_input;
         result_list.push_back( greedy_value );
 
-        /*
+
+
+        ///*
         printf("\n-----------------------------------------------\nDRSVR WARP ORDER BEFORE: \n");
         unsigned j = 0;
         for (unsigned i=0; i<temp.size(); i++) {
@@ -828,10 +846,13 @@ void scheduler_unit::order_by_priority( std::vector< T >& result_list,
                 continue;
             }
             j++;
-            printf("%u \t", temp.at(i)->get_dynamic_warp_id());
+            //get_warp_id()
+            //
+            printf("%u - PC:%u ;\t", temp.at(i)->get_dynamic_warp_id(), 0);
         }
         printf("\nActive Warps: %u \n-----------------------------------------------\n", j);
-        */
+        //*/
+
         std::sort( temp.begin(), temp.end(), priority_func );
         /*
         printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER: \n");
@@ -1186,6 +1207,39 @@ bool scheduler_unit::sort_warps_by_oldest_dynamic_id(shd_warp_t* lhs, shd_warp_t
     }
 }
 
+
+// DRSVR OAWS
+bool scheduler_unit::sort_warps_by_oldest_dynamic_id_oaws(shd_warp_t* lhs, shd_warp_t* rhs)
+{
+
+    if (rhs && lhs) {
+        if ( lhs->done_exit() || lhs->waiting() ) {
+
+            /*
+            if (lhs->done_exit()) {
+                printf("DRSVR lhs->done_exit() warp id: %u ; %d \n", lhs->get_warp_id(), lhs->done_exit());
+            }
+            else {
+                printf("DRSVR lhs->waiting() warp id: %u ; %d \n", lhs->get_warp_id(), lhs->waiting());
+            }
+             */
+
+            return false;
+        } else if ( rhs->done_exit() || rhs->waiting() ) {
+            return true;
+        } else {
+            //printf("DRSVR lhs->get_dynamic_warp_id(): %u  rhs->get_dynamic_warp_id(): %u  \n",
+            //       lhs->get_warp_id(),
+            //       lhs->done_exit());
+
+            return lhs->get_dynamic_warp_id() < rhs->get_dynamic_warp_id();
+        }
+    } else {
+        //printf("DRSVR: lhs: %d , rhs: %d \n");
+        return lhs < rhs;
+    }
+}
+
 void lrr_scheduler::order_warps()
 {
     order_lrr( m_next_cycle_prioritized_warps,
@@ -1196,7 +1250,7 @@ void lrr_scheduler::order_warps()
 
 void gto_scheduler::order_warps()
 {
-    //printf("DRSVR Schedular GTO!\n");
+    printf("DRSVR Schedular GTO!\n");
     order_by_priority( m_next_cycle_prioritized_warps,
                        m_supervised_warps,
                        m_last_supervised_issued,
@@ -1204,6 +1258,19 @@ void gto_scheduler::order_warps()
                        ORDERING_GREEDY_THEN_PRIORITY_FUNC,
                        scheduler_unit::sort_warps_by_oldest_dynamic_id );
 }
+
+
+void oaws_scheduler::order_warps()
+{
+    printf("DRSVR Schedular OAWS!\n");
+    order_by_priority( m_next_cycle_prioritized_warps,
+                       m_supervised_warps,
+                       m_last_supervised_issued,
+                       m_supervised_warps.size(),
+                       ORDERING_GREEDY_THEN_PRIORITY_FUNC,
+                       scheduler_unit::sort_warps_by_oldest_dynamic_id_oaws );
+}
+
 
 void
 two_level_active_scheduler::do_on_warp_issued( unsigned warp_id,
@@ -1298,6 +1365,7 @@ swl_scheduler::swl_scheduler ( shader_core_stats* stats, shader_core_ctx* shader
 
 void swl_scheduler::order_warps()
 {
+    printf("DRSVR SWL!\n");
     if ( SCHEDULER_PRIORITIZATION_GTO == m_prioritization ) {
         order_by_priority( m_next_cycle_prioritized_warps,
                            m_supervised_warps,
@@ -1586,7 +1654,7 @@ mem_stage_stall_type ldst_unit::process_memory_access_queue( cache_t *cache, war
     //const mem_access_t &access = inst.accessq_back();
 
     // DRSVR Print Accessq
-    if (m_sid==5) { inst.accessq_print(); }
+    // if (m_sid==5) { inst.accessq_print(); }
 
     mem_fetch *mf = m_mf_allocator->alloc(inst,inst.accessq_back());
     std::list<cache_event> events;
