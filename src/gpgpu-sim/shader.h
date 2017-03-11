@@ -108,6 +108,7 @@ public:
         m_last_fetch=0;
         m_next=0;
         m_inst_at_barrier=NULL;
+        m_oaws_approved=false;
     }
     void init( address_type start_pc,
                unsigned cta_id,
@@ -127,6 +128,7 @@ public:
         m_active_threads = active;
         m_done_exit=false;
         m_sm_id = sm_id;
+        m_oaws_approved=true;
     }
 
     bool functional_done() const;
@@ -135,6 +137,9 @@ public:
 
     bool done_exit() const { return m_done_exit; }
     void set_done_exit() { m_done_exit=true; }
+
+
+    bool oaws_approved() const {return m_oaws_approved;}
 
     void print( FILE *fout ) const;
     void print_ibuffer( FILE *fout ) const;
@@ -232,6 +237,9 @@ public:
     unsigned get_dynamic_warp_id() const { return m_dynamic_warp_id; }
     unsigned get_warp_id() const { return m_warp_id; }
 
+    void setOAWSApproved() { m_oaws_approved = true;}
+    void resetOAWSApproved() { m_oaws_approved = false;}
+
 private:
     static const unsigned IBUFFER_SIZE=2;
     class shader_core_ctx *m_shader;
@@ -261,6 +269,8 @@ private:
     bool     m_membar;             // if true, warp is waiting at memory barrier
 
     bool m_done_exit; // true once thread exit has been registered for threads in this warp
+
+    bool m_oaws_approved; // true when we have enough mshr entries
 
     unsigned long long m_last_fetch;
 
@@ -382,6 +392,8 @@ public:
                             unsigned num_warps_to_add,
                             OrderingType age_ordering,
                             bool (*priority_func)(U lhs, U rhs) );
+    template < typename U >
+    void set_OAWS_flags(std::vector< U >& input_list);
 
 
     static bool sort_warps_by_oldest_dynamic_id(shd_warp_t* lhs, shd_warp_t* rhs);

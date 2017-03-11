@@ -756,7 +756,6 @@ void shader_core_ctx::issue(){
     for (unsigned i = 0; i < schedulers.size(); i++) {
         schedulers[i]->load_smObj(drsvrObj);
         //schedulers[i]->get_smObj()->print_dlc_table();
-        schedulers[i]->get_smObj()->oawsApproved(240);
         //if (m_sid == 5){  printf("DRSVR issue scheduler:> %d \n",i); }
         schedulers[i]->cycle();
     }
@@ -808,6 +807,25 @@ void scheduler_unit::order_lrr( std::vector< T >& result_list,
     }
 }
 
+
+template < class T >
+void scheduler_unit::set_OAWS_flags(std::vector< T > &input_list){
+    for (unsigned i=0; i<input_list.size(); i++){
+        //shd_warp_t *test;
+        if ( input_list.at(i)->get_dynamic_warp_id() == 4294967295) {
+            continue;
+        }
+
+        if (smObj->oawsApproved(input_list.at(i)->get_pc())){
+            input_list.at(i)->setOAWSApproved();
+        }
+        else {
+            input_list.at(i)->resetOAWSApproved();
+        }
+
+    }
+}
+
 /**
  * A general function to order things in an priority-based way.
  * The core usage of the function is similar to order_lrr.
@@ -828,7 +846,7 @@ void scheduler_unit::order_by_priority( std::vector< T >& result_list,
                                         bool (*priority_func)(T lhs, T rhs) )
 {
     assert( num_warps_to_add <= input_list.size() );
-    printf("DRSVR input_list size:  %u ; num_warps_to_add: %u ;\n", input_list.size(), num_warps_to_add);
+    //printf("DRSVR input_list size:  %u ; num_warps_to_add: %u ;\n", input_list.size(), num_warps_to_add);
     result_list.clear();
 
     typename std::vector< T > temp = input_list;
@@ -840,33 +858,82 @@ void scheduler_unit::order_by_priority( std::vector< T >& result_list,
 
 
         ///*
+        printf("#############################################################################;\n");
         printf("\n-----------------------------------------------\nDRSVR WARP ORDER BEFORE: \n");
         unsigned j = 0;
+        unsigned o = 0;
         for (unsigned i=0; i<temp.size(); i++) {
             if ( temp.at(i)->get_dynamic_warp_id() == 4294967295) {
                 continue;
             }
             j++;
-            //get_warp_id()
-            //
-            printf("%u - PC:%u ;\t", temp.at(i)->get_dynamic_warp_id(), 0);
+
+            //shd_warp_t *test;
+            //test->oaws_approved();
+            //test->get_sm_id();
+
+            printf("%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_dynamic_warp_id(), temp.at(i)->get_pc(), temp.at(i)->get_sm_id() , temp.at(i)->oaws_approved());
+
+            if (temp.at(i)->oaws_approved()){
+                o++;
+            }
         }
-        printf("\nActive Warps: %u \n-----------------------------------------------\n", j);
+        printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j , o);
         //*/
 
-        std::sort( temp.begin(), temp.end(), priority_func );
-        /*
-        printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER: \n");
-        j = 0;
+
+
+        this->set_OAWS_flags(temp);
+
+        ///*
+        printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER FLAGS: \n");
         for (unsigned i=0; i<temp.size(); i++) {
             if ( temp.at(i)->get_dynamic_warp_id() == 4294967295) {
                 continue;
             }
             j++;
-            printf("%u \t", temp.at(i)->get_dynamic_warp_id());
+
+            //shd_warp_t *test;
+            //test->oaws_approved();
+
+            printf("%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_dynamic_warp_id(), temp.at(i)->get_pc(), temp.at(i)->get_sm_id() , temp.at(i)->oaws_approved());
+
+            if (temp.at(i)->oaws_approved()){
+                o++;
+            }
         }
-        printf("\nActive Warps: %u \n-----------------------------------------------\n", j);
-        */
+        printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j , o);
+        //*/
+
+
+
+        std::sort( temp.begin(), temp.end(), priority_func );
+
+
+        ///*
+        printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER SORT: \n");
+        for (unsigned i=0; i<temp.size(); i++) {
+            if ( temp.at(i)->get_dynamic_warp_id() == 4294967295) {
+                continue;
+            }
+            j++;
+
+            //shd_warp_t *test;
+            //test->oaws_approved();
+
+            printf("%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_dynamic_warp_id(), temp.at(i)->get_pc(), temp.at(i)->get_sm_id() , temp.at(i)->oaws_approved());
+
+            if (temp.at(i)->oaws_approved()){
+                o++;
+            }
+        }
+        printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j , o);
+
+        printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$;\n");
+        //*/
+
+
+
 
         typename std::vector< T >::iterator iter = temp.begin();
         for ( unsigned count = 0; count < num_warps_to_add; ++count, ++iter ) {
@@ -1217,7 +1284,7 @@ bool scheduler_unit::sort_warps_by_oldest_dynamic_id_oaws(shd_warp_t* lhs, shd_w
 
     //smObj->print_dlc_table();
     if (rhs && lhs) {
-        if ( lhs->done_exit() || lhs->waiting() ) {
+        if ( lhs->done_exit() || lhs->waiting() || (lhs->oaws_approved()==false) ) {
 
             /*
             if (lhs->done_exit()) {
@@ -1229,7 +1296,7 @@ bool scheduler_unit::sort_warps_by_oldest_dynamic_id_oaws(shd_warp_t* lhs, shd_w
              */
 
             return false;
-        } else if ( rhs->done_exit() || rhs->waiting() ) {
+        } else if ( rhs->done_exit() || rhs->waiting() || (rhs->oaws_approved()==false) ) {
             return true;
         } else {
             //printf("DRSVR lhs->get_dynamic_warp_id(): %u  rhs->get_dynamic_warp_id(): %u  \n",
