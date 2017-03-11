@@ -754,9 +754,10 @@ void shader_core_ctx::issue_warp( register_set& pipe_reg_set, const warp_inst_t*
 void shader_core_ctx::issue(){
     //really is issue;
     for (unsigned i = 0; i < schedulers.size(); i++) {
-
+        schedulers[i]->load_smObj(drsvrObj);
+        //schedulers[i]->get_smObj()->print_dlc_table();
+        schedulers[i]->get_smObj()->oawsApproved(240);
         //if (m_sid == 5){  printf("DRSVR issue scheduler:> %d \n",i); }
-
         schedulers[i]->cycle();
     }
 }
@@ -907,6 +908,8 @@ void scheduler_unit::order_by_priority( std::vector< T >& result_list,
 
 void scheduler_unit::cycle()
 {
+    assert(smObjLoaded);
+
     SCHED_DPRINTF( "scheduler_unit::cycle()\n" );
     bool valid_inst = false;  // there was one warp with a valid instruction to issue (didn't require flush due to control hazard)
     bool ready_inst = false;  // of the valid instructions, there was one not waiting for pending register writes
@@ -1212,6 +1215,7 @@ bool scheduler_unit::sort_warps_by_oldest_dynamic_id(shd_warp_t* lhs, shd_warp_t
 bool scheduler_unit::sort_warps_by_oldest_dynamic_id_oaws(shd_warp_t* lhs, shd_warp_t* rhs)
 {
 
+    //smObj->print_dlc_table();
     if (rhs && lhs) {
         if ( lhs->done_exit() || lhs->waiting() ) {
 
@@ -1458,6 +1462,9 @@ int shader_core_ctx::test_res_bus(int latency){
 
 void shader_core_ctx::execute()
 {
+    //assert(drsvrObj);
+    //drsvrObj->print_dlc_table();
+
 	for(unsigned i=0; i<num_result_bus; i++){
 		*(m_result_bus[i]) >>=1;
 	}

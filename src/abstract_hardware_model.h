@@ -865,8 +865,6 @@ private:
 
     std::vector<unsigned> transaction_history_vector;
 
-
-    
     void update_inst(unsigned input_PC) {
         dlcTable.at(input_PC)->instCounter++;
     }
@@ -878,6 +876,18 @@ private:
 
     void update_set (unsigned input_PC, unsigned set_count){
         dlcTable.at(input_PC)->setCounter+=set_count;
+    }
+
+    unsigned get_inst(unsigned input_PC) {
+        return (dlcTable.at(input_PC)->instCounter);
+    }
+
+    unsigned get_acc (unsigned input_PC){
+        return(dlcTable.at(input_PC)->accCounter);
+    }
+
+    unsigned get_set (unsigned input_PC){
+        return (dlcTable.at(input_PC)->setCounter);
     }
 
 
@@ -1054,6 +1064,21 @@ public:
         printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n");
     }
 
+    bool isDivergent (unsigned input_pc){
+        return (findPC(input_pc));
+    }
+
+    unsigned get_SetTouched (unsigned input_pc){
+        return (get_set(input_pc));
+    }
+
+    unsigned get_InstOccurance (unsigned input_pc){
+        return (get_inst(input_pc));
+    }
+
+    unsigned get_TransactionCounts (unsigned input_pc){
+        return (get_acc(input_pc));
+    }
 
 };
 
@@ -1163,7 +1188,6 @@ public:
 };
 
 
-
 class DRSVR {
 
 private:
@@ -1258,6 +1282,45 @@ public:
     void print_mshr_info(){
         printf("DRSVR MSHR OAWS INFO: availableMSHR = %u ; missOnFlight = %u;\n"
                 , availableMSHR, missOnFlight);
+    }
+
+    bool missPred (unsigned input_PC){
+
+        unsigned remainingMSHR = availableMSHR - missOnFlight;
+        //double SMR = 0.50;
+        unsigned threadsPerWarp = 32;
+        unsigned requiredMSHR = 32/2; // SMR = 50%
+
+        if (remainingMSHR<requiredMSHR){
+            printf("DRSVR MSHR NOT APPROVED!\n");
+            return false;
+        }
+        else {
+            printf("DRSVR MSHR APPROVED!\n");
+            return true;
+        }
+
+    }
+
+    bool oawsApproved (unsigned input_PC){
+
+        if (global_dlc_obj->isDivergent(input_PC)){
+            unsigned Inst = global_dlc_obj->get_InstOccurance(input_PC);
+            unsigned Acc = global_dlc_obj->get_TransactionCounts(input_PC);
+            unsigned Set = global_dlc_obj->get_SetTouched(input_PC);
+            printf("DRSVR %u is a dirvergent Load! Inst: %u ; Acc : %u ; Set : %u ;\n"
+                    ,input_PC
+                    ,Inst
+                    ,Acc
+                    ,Set
+            );
+            return (missPred(input_PC));
+
+        }
+        else {
+            printf("DRSVR %u is not a divergent Load!\n", input_PC);
+            return true;
+        }
     }
 
 };
