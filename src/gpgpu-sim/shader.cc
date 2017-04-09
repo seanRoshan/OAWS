@@ -82,7 +82,6 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
     //printf("HELLODRSVR! SHADER #%u have been created!\n",shader_id);
     drsvrObj = new DRSVR(shader_id);
 
-
     m_cluster = cluster;
     m_config = config;
     m_memory_config = mem_config;
@@ -322,7 +321,7 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
     m_last_inst_gpu_tot_sim_cycle = 0;
 }
 
-void shader_core_ctx::reinit(unsigned start_thread, unsigned end_thread, bool reset_not_completed ) 
+void shader_core_ctx::reinit(unsigned start_thread, unsigned end_thread, bool reset_not_completed )
 {
    if( reset_not_completed ) {
        m_not_completed = 0;
@@ -811,12 +810,27 @@ void scheduler_unit::order_lrr( std::vector< T >& result_list,
 template < class T >
 void scheduler_unit::set_OAWS_flags(std::vector< T > &input_list){
     for (unsigned i=0; i<input_list.size(); i++){
+
         //shd_warp_t *test;
+        //test->get_warp_id();
+
+
+        //this->m_simt_stack[]
+
+
+
+
         if ( input_list.at(i)->get_dynamic_warp_id() == 4294967295) {
             continue;
         }
 
-        if (smObj->oawsApproved(input_list.at(i)->get_pc())){
+
+        unsigned warp_id = input_list.at(i)->get_warp_id();
+        unsigned activeThreadsCount = m_simt_stack[warp_id]->get_active_mask().count();
+
+        //if (smObj->oawsApproved(input_list.at(i)->get_pc(), input_list.at(i)->getActiveThreadCount())){
+
+        if (smObj->oawsApproved(input_list.at(i)->get_pc(), activeThreadsCount)){
             input_list.at(i)->setOAWSApproved();
         }
         else {
@@ -918,7 +932,8 @@ void scheduler_unit::order_by_priority( std::vector< T >& result_list,
             }
             j++;
 
-            //shd_warp_t *test;
+            shd_warp_t *test;
+
             //test->oaws_approved();
 
             printf("%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_dynamic_warp_id(), temp.at(i)->get_pc(), temp.at(i)->get_sm_id() , temp.at(i)->oaws_approved());
@@ -1013,8 +1028,6 @@ void scheduler_unit::cycle()
 
 
         //printf("DRSVR max_issue: %u \n", max_issue);
-
-
 
         while( !warp(warp_id).waiting() && !warp(warp_id).ibuffer_empty() && (checked < max_issue) && (checked <= issued) && (issued < max_issue) ) {
 
@@ -1134,12 +1147,17 @@ void scheduler_unit::cycle()
                     //printf("\n-------------------------------------------------------------\n");
                 } else {
                     valid_inst = true;
+
+
                     if ( !m_scoreboard->checkCollision(warp_id, pI) ) {
                         SCHED_DPRINTF( "Warp (warp_id %u, dynamic_warp_id %u) passes scoreboard\n",
                                        (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id() );
                         ready_inst = true;
                         const active_mask_t &active_mask = m_simt_stack[warp_id]->get_active_mask();
                         assert( warp(warp_id).inst_in_pipeline() );
+
+                        //printf("\nDaniel : %u - %u\n",active_mask.count(), (*iter)->get_sm_id());
+
                         if ( (pI->op == LOAD_OP) || (pI->op == STORE_OP) || (pI->op == MEMORY_BARRIER_OP) ) {
                             if( m_mem_out->has_free() ) {
                                 m_shader->issue_warp(*m_mem_out,pI,active_mask,warp_id);

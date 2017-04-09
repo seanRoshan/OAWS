@@ -755,7 +755,7 @@ public:
 
         this->reset_histogram();
 
-        //printf("INSIDE DRSVR %s Histogram : h_sm_id: %u ; h_warp_id: %u ;\n", histogramName.c_str(), h_sm_id, h_warp_id);
+        //printf("INSID\E DRSVR %s Histogram : h_sm_id: %u ; h_warp_id: %u ;\n", histogramName.c_str(), h_sm_id, h_warp_id);
 
     }
 
@@ -1284,37 +1284,61 @@ public:
                 , availableMSHR, missOnFlight);
     }
 
-    bool missPred (unsigned input_PC){
+    bool missPred (unsigned input_PC, unsigned active_threads){
 
         unsigned remainingMSHR = availableMSHR - missOnFlight;
-        //double SMR = 0.50;
-        unsigned threadsPerWarp = 32;
-        unsigned requiredMSHR = 32/2; // SMR = 50%
+
+        unsigned SMR_Fraction = 2;
+        unsigned fixedActive_threads = 1;
+        unsigned requiredMSHR = 0;
+
+        fixedActive_threads = active_threads;
+
+        if (active_threads>=SMR_Fraction){
+            while (fixedActive_threads%SMR_Fraction!=0){
+                fixedActive_threads++;
+            }
+            requiredMSHR = fixedActive_threads/SMR_Fraction;
+        }
+        else {
+            requiredMSHR = 1;
+        }
 
         if (remainingMSHR<requiredMSHR){
-            printf("DRSVR MSHR NOT APPROVED!\n");
+            printf("DRSVR MSHR NOT APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
+                    ,remainingMSHR
+                    ,availableMSHR
+                    ,missOnFlight
+                    ,active_threads
+                    ,requiredMSHR);
             return false;
         }
         else {
-            printf("DRSVR MSHR APPROVED!\n");
+            printf("DRSVR MSHR APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
+                    ,remainingMSHR
+                    ,availableMSHR
+                    ,missOnFlight
+                    ,active_threads
+                    ,requiredMSHR);
             return true;
         }
 
     }
 
-    bool oawsApproved (unsigned input_PC){
+    bool oawsApproved (unsigned input_PC, unsigned active_threads){
 
         if (global_dlc_obj->isDivergent(input_PC)){
             unsigned Inst = global_dlc_obj->get_InstOccurance(input_PC);
             unsigned Acc = global_dlc_obj->get_TransactionCounts(input_PC);
             unsigned Set = global_dlc_obj->get_SetTouched(input_PC);
-            printf("DRSVR %u is a dirvergent Load! Inst: %u ; Acc : %u ; Set : %u ;\n"
+            printf("DRSVR %u is a dirvergent Load! ActiveThreads: %u/32 ; Inst: %u ; Acc : %u ; Set : %u ;\n"
                     ,input_PC
+                    ,active_threads
                     ,Inst
                     ,Acc
                     ,Set
             );
-            return (missPred(input_PC));
+            return (missPred(input_PC, active_threads));
 
         }
         else {
@@ -1473,6 +1497,7 @@ public:
     void issue( const active_mask_t &mask, unsigned warp_id, unsigned long long cycle, int dynamic_warp_id, unsigned sm_id, DRSVR *drsvrObj)
     {
         m_warp_active_mask = mask;
+        printf("DRSVR m_warp_active_mask: %s; \n",mask.to_string().c_str());
         m_warp_issued_mask = mask; 
         m_uid = ++sm_next_uid;
         m_warp_id = warp_id;

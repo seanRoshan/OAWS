@@ -240,6 +240,17 @@ public:
     void setOAWSApproved() { m_oaws_approved = true;}
     void resetOAWSApproved() { m_oaws_approved = false;}
 
+    unsigned getActiveThreadCount()
+    {
+
+      //active_mask_t &active_mask =
+       //       m_simt_stack[warp_id]->get_active_mask();
+
+        //active_mask_t &active_mask = m_simt_stack[warp_id]->get_active_mask();
+       printf("  %s - [%u]\t", m_active_threads.to_string().c_str() ,m_active_threads.count());
+       return m_active_threads.count();
+    }
+
 private:
     static const unsigned IBUFFER_SIZE=2;
     class shader_core_ctx *m_shader;

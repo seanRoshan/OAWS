@@ -779,8 +779,21 @@ void simt_stack::launch( address_type start_pc, const simt_mask_t &active_mask )
 
 const simt_mask_t &simt_stack::get_active_mask() const
 {
-    assert(m_stack.size() > 0);
-    return m_stack.back().m_active_mask;
+
+
+    if (m_stack.size() > 0){
+        assert(m_stack.size() > 0);
+        //printf("Shahriyar:> %s - %u \n",m_stack.back().m_active_mask.to_string().c_str(), m_stack.back().m_active_mask.count());
+        return m_stack.back().m_active_mask;
+    }
+    else {
+        simt_stack_entry new_stack_entry;
+        new_stack_entry.m_active_mask.reset();
+        //printf("Shahriyar:> %s - %u \n",new_stack_entry.m_active_mask.to_string().c_str(), new_stack_entry.m_active_mask.count());
+        return new_stack_entry.m_active_mask;
+    }
+
+
 }
 
 void simt_stack::get_pdom_stack_top_info( unsigned *pc, unsigned *rpc ) const
