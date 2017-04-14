@@ -1497,7 +1497,7 @@ public:
     void issue( const active_mask_t &mask, unsigned warp_id, unsigned long long cycle, int dynamic_warp_id, unsigned sm_id, DRSVR *drsvrObj)
     {
         m_warp_active_mask = mask;
-        printf("DRSVR m_warp_active_mask: %s; \n",mask.to_string().c_str());
+        //printf("DRSVR m_warp_active_mask: %s; \n",mask.to_string().c_str());
         m_warp_issued_mask = mask; 
         m_uid = ++sm_next_uid;
         m_warp_id = warp_id;
