@@ -1305,44 +1305,44 @@ public:
         }
 
         if (remainingMSHR<requiredMSHR){
-            printf("DRSVR MSHR NOT APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
+            /*printf("DRSVR MSHR NOT APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
                     ,remainingMSHR
                     ,availableMSHR
                     ,missOnFlight
                     ,active_threads
-                    ,requiredMSHR);
+                    ,requiredMSHR);*/
             return false;
         }
         else {
-            printf("DRSVR MSHR APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
+            /*printf("DRSVR MSHR APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
                     ,remainingMSHR
                     ,availableMSHR
                     ,missOnFlight
                     ,active_threads
-                    ,requiredMSHR);
+                    ,requiredMSHR);*/
             return true;
         }
 
     }
 
-    bool oawsApproved (unsigned input_PC, unsigned active_threads){
+    bool oawsApproved(unsigned input_PC, unsigned active_threads){
 
         if (global_dlc_obj->isDivergent(input_PC)){
             unsigned Inst = global_dlc_obj->get_InstOccurance(input_PC);
             unsigned Acc = global_dlc_obj->get_TransactionCounts(input_PC);
             unsigned Set = global_dlc_obj->get_SetTouched(input_PC);
-            printf("DRSVR %u is a dirvergent Load! ActiveThreads: %u/32 ; Inst: %u ; Acc : %u ; Set : %u ;\n"
+/*            printf("%u is a dirvergent Load! ActiveThreads: %u/32 ; Inst: %u ; Acc : %u ; Set : %u ;\n"
                     ,input_PC
                     ,active_threads
                     ,Inst
                     ,Acc
                     ,Set
-            );
+            );*/
             return (missPred(input_PC, active_threads));
 
         }
         else {
-            printf("DRSVR %u is not a divergent Load!\n", input_PC);
+            //printf("%u is not a divergent Load!\n", input_PC);
             return true;
         }
     }

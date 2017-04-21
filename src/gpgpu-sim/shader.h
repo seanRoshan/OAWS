@@ -397,7 +397,8 @@ public:
         NUM_ORDERING,
     };
     template < typename U >
-    void order_by_priority( std::vector< U >& result_list,
+    void order_by_priority( bool isOAWS,
+                            std::vector< U >& result_list,
                             const typename std::vector< U >& input_list,
                             const typename std::vector< U >::const_iterator& last_issued_from_input,
                             unsigned num_warps_to_add,

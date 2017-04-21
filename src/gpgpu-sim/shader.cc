@@ -713,12 +713,16 @@ void shader_core_ctx::fetch()
 void shader_core_ctx::func_exec_inst( warp_inst_t &inst )
 {
     execute_warp_inst_t(inst);
+
     if( inst.is_load() || inst.is_store() )
         inst.generate_mem_accesses();
+    //printf("TEST SHAH AFTER inst.generate_mem_accesses()\n");
 }
 
 void shader_core_ctx::issue_warp( register_set& pipe_reg_set, const warp_inst_t* next_inst, const active_mask_t &active_mask, unsigned warp_id )
 {
+
+
     warp_inst_t** pipe_reg = pipe_reg_set.get_free();
     assert(pipe_reg);
     
@@ -726,9 +730,24 @@ void shader_core_ctx::issue_warp( register_set& pipe_reg_set, const warp_inst_t*
     assert(next_inst->valid());
     **pipe_reg = *next_inst; // static instruction information
 
+
+    assert(drsvrObj);
+
+
     (*pipe_reg)->issue( active_mask, warp_id, gpu_tot_sim_cycle + gpu_sim_cycle, m_warp[warp_id].get_dynamic_warp_id(), m_warp[warp_id].get_sm_id(), drsvrObj ); // dynamic instruction information
+
+
+
     m_stats->shader_cycle_distro[2+(*pipe_reg)->active_count()]++;
+
+
     func_exec_inst( **pipe_reg );
+
+    //printf("SHAH TEST : INSIDE ISSUE WARP STAGE AFTER func_exec_inst!\n");
+
+
+
+
     if( next_inst->op == BARRIER_OP ){
     	m_warp[warp_id].store_info_of_last_inst_at_barrier(*pipe_reg);
         m_barriers.warp_reaches_barrier(m_warp[warp_id].get_cta_id(),warp_id,const_cast<warp_inst_t*> (next_inst));
@@ -744,10 +763,6 @@ void shader_core_ctx::issue_warp( register_set& pipe_reg_set, const warp_inst_t*
     m_warp[warp_id].set_next_pc(next_inst->pc + next_inst->isize);
 
     //drsvrObj->printWarpVector();
-    if (m_sid==5){
-        //drsvrObj->print_histogram(warp_id,"subwarp_size");
-        //drsvrObj->print_histogram_global("subwarp_size");
-    }
 }
 
 void shader_core_ctx::issue(){
@@ -809,24 +824,27 @@ void scheduler_unit::order_lrr( std::vector< T >& result_list,
 
 template < class T >
 void scheduler_unit::set_OAWS_flags(std::vector< T > &input_list){
+
+
     for (unsigned i=0; i<input_list.size(); i++){
 
         //shd_warp_t *test;
         //test->get_warp_id();
-
-
         //this->m_simt_stack[]
-
-
-
 
         if ( input_list.at(i)->get_dynamic_warp_id() == 4294967295) {
             continue;
         }
 
 
-        unsigned warp_id = input_list.at(i)->get_warp_id();
-        unsigned activeThreadsCount = m_simt_stack[warp_id]->get_active_mask().count();
+        unsigned my_warp_id = input_list.at(i)->get_warp_id();
+        unsigned my_dynamic_warp_id = input_list.at(i)->get_dynamic_warp_id();
+        unsigned activeThreadsCount = m_simt_stack[my_warp_id]->get_active_mask().count();
+
+       /* printf("OAWS FLAG FUNCTION: warp_id:%u ; dynamic_warp_id:%u ; activeThreads:%u; PC: "
+                , my_warp_id
+                , my_dynamic_warp_id
+                , activeThreadsCount);*/
 
         //if (smObj->oawsApproved(input_list.at(i)->get_pc(), input_list.at(i)->getActiveThreadCount())){
 
@@ -852,7 +870,8 @@ void scheduler_unit::set_OAWS_flags(std::vector< T > &input_list){
  *                           would compare the age of the two warps.
  */
 template < class T >
-void scheduler_unit::order_by_priority( std::vector< T >& result_list,
+void scheduler_unit::order_by_priority( bool isOAWS,
+                                        std::vector< T >& result_list,
                                         const typename std::vector< T >& input_list,
                                         const typename std::vector< T >::const_iterator& last_issued_from_input,
                                         unsigned num_warps_to_add,
@@ -871,8 +890,8 @@ void scheduler_unit::order_by_priority( std::vector< T >& result_list,
 
 
 
-        ///*
-        printf("#############################################################################;\n");
+
+        /*printf("#############################################################################;\n");
         printf("\n-----------------------------------------------\nDRSVR WARP ORDER BEFORE: \n");
         unsigned j = 0;
         unsigned o = 0;
@@ -883,71 +902,51 @@ void scheduler_unit::order_by_priority( std::vector< T >& result_list,
             j++;
 
             //shd_warp_t *test;
+            //test->get_warp_id()
             //test->oaws_approved();
             //test->get_sm_id();
 
-            printf("%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_dynamic_warp_id(), temp.at(i)->get_pc(), temp.at(i)->get_sm_id() , temp.at(i)->oaws_approved());
+            printf("%u-%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_warp_id(), temp.at(i)->get_dynamic_warp_id(), temp.at(i)->get_pc(), temp.at(i)->get_sm_id() , temp.at(i)->oaws_approved());
 
             if (temp.at(i)->oaws_approved()){
                 o++;
             }
         }
         printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j , o);
-        //*/
+        j=0;
+        o=0;*/
 
 
 
-        this->set_OAWS_flags(temp);
+        if (isOAWS == true) {
 
-        ///*
-        printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER FLAGS: \n");
-        for (unsigned i=0; i<temp.size(); i++) {
-            if ( temp.at(i)->get_dynamic_warp_id() == 4294967295) {
-                continue;
-            }
-            j++;
+            this->set_OAWS_flags(temp);
 
-            //shd_warp_t *test;
-            //test->oaws_approved();
+            /*printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER FLAGS: \n");
+for (unsigned i=0; i<temp.size(); i++) {
+    if ( temp.at(i)->get_dynamic_warp_id() == 4294967295) {
+        continue;
+    }
+    j++;
 
-            printf("%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_dynamic_warp_id(), temp.at(i)->get_pc(), temp.at(i)->get_sm_id() , temp.at(i)->oaws_approved());
+    //shd_warp_t *test;
+    //test->oaws_approved();
 
-            if (temp.at(i)->oaws_approved()){
-                o++;
-            }
+    printf("%u-%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_warp_id(), temp.at(i)->get_dynamic_warp_id(), temp.at(i)->get_pc(), temp.at(i)->get_sm_id() , temp.at(i)->oaws_approved());
+
+    if (temp.at(i)->oaws_approved()){
+        o++;
+    }
+}
+printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j , o);
+j=0;
+o=0;
+*/
+
         }
-        printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j , o);
-        //*/
-
 
 
         std::sort( temp.begin(), temp.end(), priority_func );
-
-
-        ///*
-        printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER SORT: \n");
-        for (unsigned i=0; i<temp.size(); i++) {
-            if ( temp.at(i)->get_dynamic_warp_id() == 4294967295) {
-                continue;
-            }
-            j++;
-
-            shd_warp_t *test;
-
-            //test->oaws_approved();
-
-            printf("%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_dynamic_warp_id(), temp.at(i)->get_pc(), temp.at(i)->get_sm_id() , temp.at(i)->oaws_approved());
-
-            if (temp.at(i)->oaws_approved()){
-                o++;
-            }
-        }
-        printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j , o);
-
-        printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$;\n");
-        //*/
-
-
 
 
         typename std::vector< T >::iterator iter = temp.begin();
@@ -956,6 +955,37 @@ void scheduler_unit::order_by_priority( std::vector< T >& result_list,
                 result_list.push_back( *iter );
             }
         }
+
+
+/*
+        printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER SORT: \n");
+        for (unsigned i=0; i<result_list.size(); i++) {
+            if ( result_list.at(i)->get_dynamic_warp_id() == 4294967295) {
+                continue;
+            }
+            j++;
+
+            //shd_warp_t *test;
+
+            //test->oaws_approved();
+
+            printf("%u-%u - PC:%u - SM:%u [%u];\t", result_list.at(i)->get_warp_id(), result_list.at(i)->get_dynamic_warp_id(), result_list.at(i)->get_pc(), result_list.at(i)->get_sm_id() , result_list.at(i)->oaws_approved());
+
+            if (result_list.at(i)->oaws_approved()){
+                o++;
+            }
+        }
+        printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j , o);
+
+        printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$;\n");
+*/
+
+
+
+
+
+
+
 
         /*
         printf("\n-----------------------------------------------\nDRSVR WARP ORDER LAST: \n");
@@ -976,7 +1006,14 @@ void scheduler_unit::order_by_priority( std::vector< T >& result_list,
         */
 
     } else if ( ORDERED_PRIORITY_FUNC_ONLY == ordering ) {
-        //printf("DRSVR: Ordered ORDERED_PRIORITY_FUNC_ONLY!\n");
+
+        //DRSVR ADDED
+        printf("DRSVR: ORDERED_PRIORITY_FUNC_ONLY!\n");
+        exit(0);
+
+
+
+
         std::sort( temp.begin(), temp.end(), priority_func );
         typename std::vector< T >::iterator iter = temp.begin();
         for ( unsigned count = 0; count < num_warps_to_add; ++count, ++iter ) {
@@ -986,6 +1023,8 @@ void scheduler_unit::order_by_priority( std::vector< T >& result_list,
         fprintf( stderr, "Unknown ordering - %d\n", ordering );
         abort();
     }
+
+
 }
 
 void scheduler_unit::cycle()
@@ -1009,6 +1048,8 @@ void scheduler_unit::cycle()
           iter != m_next_cycle_prioritized_warps.end();
           iter++ ) {
 
+
+
         //printf("%u\t", (*iter)->get_warp_id());
 
         // Don't consider warps that are not yet valid
@@ -1027,6 +1068,10 @@ void scheduler_unit::cycle()
         unsigned max_issue = m_shader->m_config->gpgpu_max_insn_issue_per_warp;
 
 
+        //printf("\nTEST SHAH! Dynamic_Warp_ID : %u;\n",(*iter)->get_dynamic_warp_id());
+
+
+
         //printf("DRSVR max_issue: %u \n", max_issue);
 
         while( !warp(warp_id).waiting() && !warp(warp_id).ibuffer_empty() && (checked < max_issue) && (checked <= issued) && (issued < max_issue) ) {
@@ -1039,10 +1084,15 @@ void scheduler_unit::cycle()
 
             bool warp_inst_issued = false;
 
+
+
             // RPC : PC for Reconvergence Point
             unsigned pc, rpc;
 
+
             m_simt_stack[warp_id]->get_pdom_stack_top_info(&pc,&rpc);
+
+
 
             SCHED_DPRINTF( "Warp (warp_id %u, dynamic_warp_id %u) has valid instruction (%s)\n",
                            (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id(),
@@ -1106,12 +1156,17 @@ void scheduler_unit::cycle()
 
             */
 
+
+
             if( pI ) {
 				//printf("DRSVR PC: %x \n", pI->pc);
                 assert(valid);
 
+
+
                 // Shahriyar NOTE: Branch has been occured, so the pc is different from the instruction buffer
                 if( pc != pI->pc ) {
+
                     SCHED_DPRINTF( "Warp (warp_id %u, dynamic_warp_id %u) control hazard instruction flush\n",
                                    (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id() );
                     // control hazard
@@ -1146,25 +1201,34 @@ void scheduler_unit::cycle()
                     //warp(warp_id).print2_ibuffer();
                     //printf("\n-------------------------------------------------------------\n");
                 } else {
+
                     valid_inst = true;
 
 
                     if ( !m_scoreboard->checkCollision(warp_id, pI) ) {
+
                         SCHED_DPRINTF( "Warp (warp_id %u, dynamic_warp_id %u) passes scoreboard\n",
                                        (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id() );
+
+
                         ready_inst = true;
                         const active_mask_t &active_mask = m_simt_stack[warp_id]->get_active_mask();
+
                         assert( warp(warp_id).inst_in_pipeline() );
 
                         //printf("\nDaniel : %u - %u\n",active_mask.count(), (*iter)->get_sm_id());
 
                         if ( (pI->op == LOAD_OP) || (pI->op == STORE_OP) || (pI->op == MEMORY_BARRIER_OP) ) {
+
+
+
                             if( m_mem_out->has_free() ) {
+                                //printf("SHAH TEST Before memory issue!!\n");
                                 m_shader->issue_warp(*m_mem_out,pI,active_mask,warp_id);
+                                //printf("SHAH TEST After memory issue!!\n");
                                 issued++;
                                 issued_inst=true;
                                 warp_inst_issued = true;
-
                  /*
 				if (pI->op == LOAD_OP) {
 
@@ -1177,6 +1241,7 @@ void scheduler_unit::cycle()
                  }
                  */
                             }
+
                         } else {
                             bool sp_pipe_avail = m_sp_out->has_free();
                             bool sfu_pipe_avail = m_sfu_out->has_free();
@@ -1216,6 +1281,7 @@ void scheduler_unit::cycle()
                 warp(warp_id).ibuffer_flush();
                 //warp(warp_id).print2_ibuffer();
             }
+
             if(warp_inst_issued) {
                 SCHED_DPRINTF( "Warp (warp_id %u, dynamic_warp_id %u) issued %u instructions\n",
                                (*iter)->get_warp_id(),
@@ -1241,6 +1307,8 @@ void scheduler_unit::cycle()
             break;
         } 
     }
+
+
 
     // issue stall statistics:f
     if( !valid_inst ) 
@@ -1339,8 +1407,10 @@ void lrr_scheduler::order_warps()
 
 void gto_scheduler::order_warps()
 {
-    printf("DRSVR Schedular GTO!\n");
-    order_by_priority( m_next_cycle_prioritized_warps,
+    //printf("DRSVR Schedular GTO!\n");
+    order_by_priority(
+                       false,
+                       m_next_cycle_prioritized_warps,
                        m_supervised_warps,
                        m_last_supervised_issued,
                        m_supervised_warps.size(),
@@ -1351,13 +1421,16 @@ void gto_scheduler::order_warps()
 
 void oaws_scheduler::order_warps()
 {
-    printf("DRSVR Schedular OAWS!\n");
-    order_by_priority( m_next_cycle_prioritized_warps,
+    //printf("DRSVR Schedular OAWS!\n");
+    order_by_priority(
+                       true,
+                       m_next_cycle_prioritized_warps,
                        m_supervised_warps,
                        m_last_supervised_issued,
                        m_supervised_warps.size(),
                        ORDERING_GREEDY_THEN_PRIORITY_FUNC,
                        scheduler_unit::sort_warps_by_oldest_dynamic_id_oaws );
+
 }
 
 
@@ -1456,7 +1529,8 @@ void swl_scheduler::order_warps()
 {
     printf("DRSVR SWL!\n");
     if ( SCHEDULER_PRIORITIZATION_GTO == m_prioritization ) {
-        order_by_priority( m_next_cycle_prioritized_warps,
+        order_by_priority( false,
+                           m_next_cycle_prioritized_warps,
                            m_supervised_warps,
                            m_last_supervised_issued,
                            MIN( m_num_warps_to_limit, m_supervised_warps.size() ),

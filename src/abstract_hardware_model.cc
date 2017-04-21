@@ -322,6 +322,9 @@ void warp_inst_t::generate_mem_accesses()
         break;
 
     case global_space: case local_space: case param_space_local:
+
+
+
         if( m_config->gpgpu_coalesce_arch == 13 ) {
             //printf("DRSVR: Coalesce_Arch13 called: %u\n", ++DRSVR_COALESCE);
            if(isatomic()) {
@@ -329,11 +332,13 @@ void warp_inst_t::generate_mem_accesses()
                //printf("DRSVR: Coalesce_Arch13_atomic called: %u\n", ++DRSVR_COALESCE);
            }
            else{
+
                memory_coalescing_arch_13(is_write, access_type);
-               if ( (DRSVR_COALESCE>1) && (!is_write) && (pc==272) && (m_sm_id==5) ) {
+               /*printf("NONATOMIC:\n");
+               if ( (!is_write) && (pc==80) && (m_sm_id==0) ) {
                    printf("DRSVR: Coalesce_Arch13 returned! warpid: %u smid: %u pc: %u m_accessq_size: %u address: %u \n",
                           m_warp_id, m_sm_id, pc, accessq_count(), address_t);
-               }
+               }*/
            }
 
         } else {
@@ -380,17 +385,17 @@ void warp_inst_t::generate_mem_accesses()
     }
     m_mem_accesses_created=true;
 
-    //smObj->print_histogram_warp_parts(m_warp_id);
+    /*smObj->print_histogram_warp_parts(m_warp_id);
 
     if ( (m_warp_id == 0) && (m_sm_id == 5) ){
-        //smObj->print_histogram(m_warp_id, "warp_parts");
-        //smObj->print_histogram(m_warp_id, "data_size");
-        //smObj->print_histogram(m_warp_id, "segment_size");
-        //smObj->print_histogram(m_warp_id, "subwarp_size");
-        //smObj->print_histogram(m_warp_id,"Memory Type");
+        smObj->print_histogram(m_warp_id, "warp_parts");
+        smObj->print_histogram(m_warp_id, "data_size");
+        smObj->print_histogram(m_warp_id, "segment_size");
+        smObj->print_histogram(m_warp_id, "subwarp_size");
+        smObj->print_histogram(m_warp_id,"Memory Type");
     }
 
-    //smObj->print_histogram_global("subwarp_size");
+    smObj->print_histogram_global("subwarp_size");*/
 }
 
 void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type access_type )
@@ -413,14 +418,14 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
 
     //smObj->update_histogram_warp_parts(warp_parts, m_warp_id);
 
-    smObj->update_histogram(m_warp_id, "warp_parts", warp_parts);
+   /* smObj->update_histogram(m_warp_id, "warp_parts", warp_parts);
     smObj->update_histogram(m_warp_id, "data_size", data_size);
     smObj->update_histogram(m_warp_id, "segment_size", segment_size);
     smObj->update_histogram(m_warp_id, "subwarp_size", subwarp_size);
-    smObj->update_histogram(m_warp_id,"Memory Type",space.get_type());
+    smObj->update_histogram(m_warp_id,"Memory Type",space.get_type());*/
 
 
-    if ( (m_sm_id==5) && (m_warp_id==0)) {
+    if ( (m_sm_id==0) && (m_warp_id==25)) {
         //if ( (!is_write) && (pc==272) && (m_sm_id==5) ) {
         printf("\n##########################################################################################\n");
         printf("DRSVR: warp_parts: %u ; data_size: %u ; segment_size: %u ; subwarp_size: %u active_mask: %s ;\n"
@@ -493,12 +498,12 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
                 unsigned test2 = subwarp_transactions.size();
 
                 if ( (m_sm_id==5) && (m_warp_id==0) && (test1!=test2)) {
-                    printf("\n------------------------------------------------------------------------------\nDRSVR Creating new transaction for Block_Address:%u ; Offset_Address:%u ; Chunk:%u ; \n"
-                            , block_address, (addr&127), (addr&127)/32);
+                    /*printf("\n------------------------------------------------------------------------------\nDRSVR Creating new transaction for Block_Address:%u ; Offset_Address:%u ; Chunk:%u ; \n"
+                            , block_address, (addr&127), (addr&127)/32);*/
                 }
                 else if ( (m_sm_id==5) && (m_warp_id==0) && (test1==test2) ) {
-                    printf("\nDRSVR Updating the transaction for Block_Address:%u ; Offset_Address:%u ; Chunk:%u ; #Sets:%u ; setBits:%u \n"
-                            , block_address, (addr&127), (addr&127)/32, m_config->gpgpu_cache_dl1_setnumber, m_config->gpgpu_cache_dl1_setnumberlog2);
+                    /*printf("\nDRSVR Updating the transaction for Block_Address:%u ; Offset_Address:%u ; Chunk:%u ; #Sets:%u ; setBits:%u \n"
+                            , block_address, (addr&127), (addr&127)/32, m_config->gpgpu_cache_dl1_setnumber, m_config->gpgpu_cache_dl1_setnumberlog2);*/
                 }
 
 
@@ -517,11 +522,11 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
 
                 if ( (m_sm_id==5) && (m_warp_id==0)) {
 
-                    printf("DRSVR BlockAddress#: %u ;  chuncks : %s ; active: %s ; bytes: %s ;\n"
+                    /*printf("DRSVR BlockAddress#: %u ;  chuncks : %s ; active: %s ; bytes: %s ;\n"
                             , block_address
                             , info.chunks.to_string().c_str()
                             , info.active.to_string().c_str()
-                            , info.bytes.to_string().c_str());
+                            , info.bytes.to_string().c_str());*/
                 }
 
 
