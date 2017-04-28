@@ -416,6 +416,10 @@ public:
         smObj = drsvrObj_in;
         smObjLoaded = true;
         smObj->initialize_mshr_OAWS(this->get_available_count(),0);
+
+
+        memoryOcclusion = 0;
+        alreadyOccluded = false;
     }
 
     mshr_table( unsigned num_entries, unsigned max_merged)
@@ -424,7 +428,10 @@ public:
 #if (tr1_hash_map_ismap == 0)
             ,m_data(2*num_entries)
 #endif
-    {}
+    {
+        memoryOcclusion = 0;
+        alreadyOccluded = false;
+    }
 
     /// Checks if there is a pending request to the lower memory level already
     bool probe( new_addr_type block_addr ) const;
@@ -448,10 +455,38 @@ public:
 
     void update_oaws_status(unsigned available_in, unsigned missOnFlight_in);
 
+    void update_oaws_memoryOcclusion(bool print, unsigned in_warpid, new_addr_type in_addr, new_addr_type in_blockAddr);
+
     void check_mshr_parameters( unsigned num_entries, unsigned max_merged )
     {
     	assert(m_num_entries==num_entries && "Change of MSHR parameters between kernels is not allowed");
     	assert(m_max_merged==max_merged && "Change of MSHR parameters between kernels is not allowed");
+    }
+
+    bool isAlreadyOccluded(unsigned in_warpid, new_addr_type in_addr, new_addr_type in_blockAddr) {
+        if (alreadyOccluded){
+            if ( (in_addr != occluded_addr) || (in_warpid != occluded_warpid) || (in_blockAddr != occluded_blockAddr) ) {
+                printf("in_addr:>%u ; in_warpid:%u; ; in_blockAddr:%u\n",in_addr, in_warpid, in_blockAddr );
+                printf("occluded_addr:>%u ; occluded_warpid:%u; ; occluded_blockAddr:%u\n",occluded_addr, occluded_warpid, occluded_blockAddr );
+            }
+            assert(in_addr == occluded_addr);
+            assert(in_warpid == occluded_warpid);
+            assert(in_blockAddr == occluded_blockAddr);
+        }
+        return alreadyOccluded;
+    }
+
+    void resetOcclusionFlag(){
+        alreadyOccluded = false;
+        occluded_warpid = 0;
+        occluded_addr = 0;
+        occluded_blockAddr = 0;
+        occlusionReplay = 0;
+    }
+
+    unsigned occlusionReplayed(){
+        occlusionReplay++;
+        return occlusionReplay;
     }
 
 private:
@@ -459,6 +494,14 @@ private:
     // finite sized, fully associative table, with a finite maximum number of merged requests
     const unsigned m_num_entries;
     const unsigned m_max_merged;
+
+    unsigned long long int memoryOcclusion;
+    bool alreadyOccluded;
+    unsigned occluded_warpid;
+    new_addr_type occluded_addr;
+    new_addr_type occluded_blockAddr;
+    unsigned occlusionReplay;
+
 
     struct mshr_entry {
         std::list<mem_fetch*> m_list;

@@ -1225,6 +1225,10 @@ public:
 
     }
 
+    unsigned get_sm_id (){
+        return d_sm_id;
+    }
+
     void update_histogram(unsigned input_warp_id, std::string histogramName, unsigned input_data){
         stats_obj_vector.at(input_warp_id)->update_histogram(histogramName, input_data);
         global_stats_obj->update_histogram(histogramName, input_data);
@@ -1305,12 +1309,12 @@ public:
         }
 
         if (remainingMSHR<requiredMSHR){
-            /*printf("DRSVR MSHR NOT APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
+            printf("DRSVR MSHR NOT APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
                     ,remainingMSHR
                     ,availableMSHR
                     ,missOnFlight
                     ,active_threads
-                    ,requiredMSHR);*/
+                    ,requiredMSHR);
             return false;
         }
         else {

@@ -841,7 +841,7 @@ void scheduler_unit::set_OAWS_flags(std::vector< T > &input_list){
         unsigned my_dynamic_warp_id = input_list.at(i)->get_dynamic_warp_id();
         unsigned activeThreadsCount = m_simt_stack[my_warp_id]->get_active_mask().count();
 
-       /* printf("OAWS FLAG FUNCTION: warp_id:%u ; dynamic_warp_id:%u ; activeThreads:%u; PC: "
+        /*printf("OAWS FLAG FUNCTION: warp_id:%u ; dynamic_warp_id:%u ; activeThreads:%u; PC: "
                 , my_warp_id
                 , my_dynamic_warp_id
                 , activeThreadsCount);*/
@@ -889,96 +889,157 @@ void scheduler_unit::order_by_priority( bool isOAWS,
         result_list.push_back( greedy_value );
 
 
-
-
-        /*printf("#############################################################################;\n");
-        printf("\n-----------------------------------------------\nDRSVR WARP ORDER BEFORE: \n");
         unsigned j = 0;
         unsigned o = 0;
-        for (unsigned i=0; i<temp.size(); i++) {
-            if ( temp.at(i)->get_dynamic_warp_id() == 4294967295) {
-                continue;
+
+        /*
+        if ( (result_list.size()>0) && (result_list.at(0)->get_sm_id() == 9 )) {
+            printf("#############################################################################;\n");
+            printf("\n-----------------------------------------------\nDRSVR WARP ORDER BEFORE: \n");
+
+
+
+            for (unsigned i=0; i<temp.size(); i++) {
+                if ( temp.at(i)->get_dynamic_warp_id() == 4294967295) {
+                    continue;
+                }
+                j++;
+
+                //shd_warp_t *test;
+                //test->get_warp_id()
+                //test->oaws_approved();
+                //test->get_sm_id();
+
+                printf("%u-%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_warp_id(), temp.at(i)->get_dynamic_warp_id(), temp.at(i)->get_pc(), temp.at(i)->get_sm_id() , temp.at(i)->oaws_approved());
+
+                if (temp.at(i)->oaws_approved()){
+                    o++;
+                }
             }
-            j++;
-
-            //shd_warp_t *test;
-            //test->get_warp_id()
-            //test->oaws_approved();
-            //test->get_sm_id();
-
-            printf("%u-%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_warp_id(), temp.at(i)->get_dynamic_warp_id(), temp.at(i)->get_pc(), temp.at(i)->get_sm_id() , temp.at(i)->oaws_approved());
-
-            if (temp.at(i)->oaws_approved()){
-                o++;
-            }
-        }
-        printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j , o);
-        j=0;
-        o=0;*/
-
-
+            printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j , o);
+            j=0;
+            o=0;
+        }*/
 
         if (isOAWS == true) {
 
             this->set_OAWS_flags(temp);
 
             /*printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER FLAGS: \n");
-for (unsigned i=0; i<temp.size(); i++) {
-    if ( temp.at(i)->get_dynamic_warp_id() == 4294967295) {
-        continue;
-    }
-    j++;
+            for (unsigned i=0; i<temp.size(); i++) {
 
-    //shd_warp_t *test;
-    //test->oaws_approved();
+                if ( temp.at(i)->get_dynamic_warp_id() == 4294967295) {
+                    continue;
+                }
+                j++;
 
-    printf("%u-%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_warp_id(), temp.at(i)->get_dynamic_warp_id(), temp.at(i)->get_pc(), temp.at(i)->get_sm_id() , temp.at(i)->oaws_approved());
+                //shd_warp_t *test;
+                //test->oaws_approved();
 
-    if (temp.at(i)->oaws_approved()){
-        o++;
-    }
-}
-printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j , o);
-j=0;
-o=0;
+                printf("%u-%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_warp_id(), temp.at(i)->get_dynamic_warp_id(), temp.at(i)->get_pc(), temp.at(i)->get_sm_id() , temp.at(i)->oaws_approved());
+
+                if (temp.at(i)->oaws_approved()){
+                    o++;
+                }
+            }
+
+            printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j , o);
+            j=0;
+            o=0;
 */
-
         }
 
 
         std::sort( temp.begin(), temp.end(), priority_func );
 
+        /*if ( (result_list.size()>0) && (result_list.at(0)->get_sm_id() == 9 )) {
+
+
+            printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER FLAGS: \n");
+            for (unsigned i = 0; i < temp.size(); i++) {
+
+                if (temp.at(i)->get_dynamic_warp_id() == 4294967295) {
+                    continue;
+                }
+                j++;
+
+                //shd_warp_t *test;
+                //test->oaws_approved();
+
+                printf("%u-%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_warp_id(), temp.at(i)->get_dynamic_warp_id(),
+                       temp.at(i)->get_pc(), temp.at(i)->get_sm_id(), temp.at(i)->oaws_approved());
+
+                if (temp.at(i)->oaws_approved()) {
+                    o++;
+                }
+            }
+
+            printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j,
+                   o);
+            j = 0;
+            o = 0;
+
+        }*/
+
+
+        bool greadyRemoved = false;
+        if (greedy_value->oaws_approved() == false){
+            result_list.pop_back();
+            greadyRemoved = true;
+
+        }
+
 
         typename std::vector< T >::iterator iter = temp.begin();
         for ( unsigned count = 0; count < num_warps_to_add; ++count, ++iter ) {
-            if ( *iter != greedy_value ) {
+            if (  (*iter != greedy_value) || greadyRemoved  ) {
                 result_list.push_back( *iter );
             }
         }
 
+        if ( (result_list.size()>0) && (result_list.at(0)->get_sm_id() == 9 )) {
 
-/*
-        printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER SORT: \n");
-        for (unsigned i=0; i<result_list.size(); i++) {
-            if ( result_list.at(i)->get_dynamic_warp_id() == 4294967295) {
-                continue;
+            printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER SORT: \n");
+
+            //printf("Gready Value: %u \n",greedy_value->oaws_approved());
+
+            printf(" Gready Value: %u-%u - PC:%u - SM:%u [%u];\n", greedy_value->get_warp_id(),
+                   greedy_value->get_dynamic_warp_id(), greedy_value->get_pc(),
+                   greedy_value->get_sm_id(), greedy_value->oaws_approved());
+
+
+            for (unsigned i = 0; i < result_list.size(); i++) {
+                if (result_list.at(i)->get_dynamic_warp_id() == 4294967295) {
+                    continue;
+                }
+                j++;
+
+                //shd_warp_t *test;
+                //test->print2_ibuffer();
+
+                //test->print2_ibuffer();
+
+                //m_simt_stack[my_warp_id]->get_active_mask().count();
+                //test->getActiveThreadCount();
+                //test->done_exit()
+                //test->waiting()
+                //test->oaws_approved();
+
+                printf("%u-%u - PC:%u - SM:%u [O:%u-%u][E:%u][W:%u]; inst :", result_list.at(i)->get_warp_id(),
+                       result_list.at(i)->get_dynamic_warp_id(), result_list.at(i)->get_pc(),
+                       result_list.at(i)->get_sm_id(),
+                       result_list.at(i)->oaws_approved(), m_simt_stack[result_list.at(i)->get_warp_id()]->get_active_mask().count(), result_list.at(i)->done_exit(), result_list.at(i)->waiting());
+                //result_list.at(i)->ibuffer_next_inst()->ibuffer_next_inst()->print_insn2();
+                result_list.at(i)->print2_ibuffer();
+                if (result_list.at(i)->oaws_approved()) {
+                    o++;
+                }
             }
-            j++;
+            printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j, o);
 
-            //shd_warp_t *test;
-
-            //test->oaws_approved();
-
-            printf("%u-%u - PC:%u - SM:%u [%u];\t", result_list.at(i)->get_warp_id(), result_list.at(i)->get_dynamic_warp_id(), result_list.at(i)->get_pc(), result_list.at(i)->get_sm_id() , result_list.at(i)->oaws_approved());
-
-            if (result_list.at(i)->oaws_approved()){
-                o++;
-            }
         }
-        printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j , o);
 
-        printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$;\n");
-*/
+        //printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$;\n");
 
 
 
