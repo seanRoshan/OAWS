@@ -828,7 +828,9 @@ void scheduler_unit::set_OAWS_flags(std::vector< T > &input_list){
 
     for (unsigned i=0; i<input_list.size(); i++){
 
-        //shd_warp_t *test;
+        shd_warp_t *test;
+        //test->get_sm_id();
+        //test->get_pc();
         //test->get_warp_id();
         //this->m_simt_stack[]
 
@@ -848,7 +850,14 @@ void scheduler_unit::set_OAWS_flags(std::vector< T > &input_list){
 
         //if (smObj->oawsApproved(input_list.at(i)->get_pc(), input_list.at(i)->getActiveThreadCount())){
 
+
         if (smObj->oawsApproved(input_list.at(i)->get_pc(), activeThreadsCount)){
+            if (!input_list.at(i)->oaws_approved() && input_list.at(i)->get_sm_id()==9 ){
+               printf("OAWS Approved after disapproval! warp_id:%u ; sm_id:%u ; pc:%u \n"
+                       ,input_list.at(i)->get_warp_id()
+                       ,input_list.at(i)->get_sm_id()
+                       ,input_list.at(i)->get_pc());
+            }
             input_list.at(i)->setOAWSApproved();
         }
         else {
@@ -1117,6 +1126,19 @@ void scheduler_unit::cycle()
         if ( (*iter) == NULL || (*iter)->done_exit() ) {
             continue;
         }
+
+
+        // Don't consider warps that are not yet valid and not oaws approved
+        /*if ( (*iter) == NULL || (*iter)->done_exit() || !(*iter)->oaws_approved() ) {
+            if ( (!(*iter)->oaws_approved()) && (!(*iter)->done_exit()) && ((*iter) != NULL) && (*iter)->get_sm_id() == 9  ){
+                printf("DRSVR OAWS WARP BLOCKED: Warp ID: %u ; SM_ID: %u; PC:%u ;\n",(*iter)->get_warp_id(), (*iter)->get_sm_id(), (*iter)->get_pc());
+            }
+            continue;
+        }*/
+
+
+
+
 
         SCHED_DPRINTF( "Testing (warp_id %u, dynamic_warp_id %u)\n",
                        (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id() );
@@ -1431,7 +1453,12 @@ bool scheduler_unit::sort_warps_by_oldest_dynamic_id_oaws(shd_warp_t* lhs, shd_w
 
     //smObj->print_dlc_table();
     if (rhs && lhs) {
-        if ( lhs->done_exit() || lhs->waiting() || (lhs->oaws_approved()==false) ) {
+
+        if ((lhs->oaws_approved()==false) && (rhs->oaws_approved()==false)) {
+            return lhs < rhs;
+        }
+
+        if ( lhs->done_exit() || lhs->waiting() || (lhs->oaws_approved()==false)) {
 
             /*
             if (lhs->done_exit()) {

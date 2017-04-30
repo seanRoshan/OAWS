@@ -849,6 +849,7 @@ struct dlcEntry {
     }
 };
 
+
 class DLC {
 
 private:
@@ -1082,6 +1083,118 @@ public:
 
 };
 
+
+class OCW_LOGIC{
+
+
+private:
+
+    bool Div;
+    bool FCL;
+
+    unsigned Set;
+    unsigned Acc;
+
+    unsigned OCW;
+
+
+    unsigned CNT;
+    unsigned Delta;
+
+    const unsigned  CMAX = 255;
+    const unsigned  WMAX = 48 ;
+
+
+    void calculateDelta(){
+
+        double tempSet = static_cast<double>(Set);
+        double tempAcc = static_cast<double>(Acc);
+
+        if (Acc>Set*1.5){
+            Delta = CNT/2;
+            // Associativity Sensitive
+        }
+        else{
+            Delta = 1;
+        }
+    }
+
+
+    void OCW_Estimation_Logic (bool debugMode){
+        calculateDelta();
+
+        if (debugMode){
+            printf("DRSVR OCW LOGIC BEGIN: FCL:%u ; CNT:%u ; Delta:%u; OCW:%u ;\n",FCL, CNT, Delta, OCW);
+        }
+
+        if (FCL){
+            CNT++;
+            if ( (CNT==CMAX) && (OCW<WMAX)){
+                OCW++;
+                CNT=0;
+            }
+        }
+        else {
+            if (CNT > Delta) {
+                CNT -= Delta;
+            } else {
+                CNT = 0;
+                if (OCW > 2) {
+                    OCW--;
+                }
+            }
+        }
+
+        if (debugMode){
+            printf("DRSVR OCW LOGIC END: FCL:%u ; CNT:%u ; Delta:%u; OCW:%u ;\n",FCL, CNT, Delta, OCW);
+        }
+    }
+
+
+public:
+
+    OCW_LOGIC(){
+        Div = false;
+        FCL = false;
+        Set = 0;
+        Acc = 0;
+        OCW = 2;
+    }
+
+    void isLoadDivergent (bool isDivergent){
+        Div = isDivergent;
+    }
+
+    bool getDiv (){
+        return Div;
+    }
+
+    void isLoadFullyCached (bool isFullyCached){
+        FCL = isFullyCached;
+    }
+
+    bool getFCL (){
+        return FCL;
+    }
+
+    void setInfoSetAndAcc (unsigned in_Set, unsigned in_Acc){
+        Set = in_Set;
+        Acc = in_Acc;
+    }
+
+    /*void getNumberOfTouchedSets (){
+        return Set;
+    }*/
+
+    unsigned getOCW(){
+        bool debug = true;
+        OCW_Estimation_Logic(debug);
+        return OCW;
+    }
+
+
+};
+
 class DRSVRSTATS {
 
 private:
@@ -1308,13 +1421,17 @@ public:
             requiredMSHR = 1;
         }
 
-        if (remainingMSHR<requiredMSHR){
-            printf("DRSVR MSHR NOT APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
-                    ,remainingMSHR
-                    ,availableMSHR
-                    ,missOnFlight
-                    ,active_threads
-                    ,requiredMSHR);
+        if ( (remainingMSHR<requiredMSHR) ){
+
+            if ( (this->get_sm_id()==9) ){
+                printf("DRSVR MSHR NOT APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
+                        ,remainingMSHR
+                        ,availableMSHR
+                        ,missOnFlight
+                        ,active_threads
+                        ,requiredMSHR);
+            }
+
             return false;
         }
         else {

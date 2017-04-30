@@ -1109,7 +1109,7 @@ data_cache::rd_miss_base( new_addr_type addr,
     bool do_miss = false;
     bool wb = false;
     cache_block_t evicted;
-    printf("DRSVR rd_miss_base:\n");
+    //printf("DRSVR rd_miss_base:\n");
     send_read_request( addr,
                        block_addr,
                        cache_index,
@@ -1196,7 +1196,7 @@ data_cache::process_tag_probe( bool wr,
                                       cache_index,
                                       mf, time, events, probe_status );
         }else if ( probe_status != RESERVATION_FAIL ) {
-            printf("DRSVR process_tag_probe \t");
+            //printf("DRSVR process_tag_probe \t");
             access_status = (this->*m_rd_miss)( addr,
                                        cache_index,
                                        mf, time, events, probe_status );
@@ -1218,7 +1218,7 @@ data_cache::access( new_addr_type addr,
                     unsigned time,
                     std::list<cache_event> &events )
 {
-    printf("DRSVR access \t");
+    //printf("DRSVR access \t");
     assert( mf->get_data_size() <= m_config.get_line_sz());
     bool wr = mf->get_is_write();
     new_addr_type block_addr = m_config.block_addr(addr);
@@ -1242,7 +1242,7 @@ l1_cache::access( new_addr_type addr,
                   unsigned time,
                   std::list<cache_event> &events )
 {
-    printf("DRSVR l1 cache request status \t");
+    //printf("DRSVR l1 cache request status \t");
     return data_cache::access( addr, mf, time, events );
 }
 
