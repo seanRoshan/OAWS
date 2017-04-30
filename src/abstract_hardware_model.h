@@ -1314,6 +1314,8 @@ private:
 
         DLC *global_dlc_obj;
 
+        OCW_LOGIC *global_ocw_obj;
+
         unsigned missOnFlight;
         unsigned availableMSHR;
         bool  mshrStatsInitialized = false;
@@ -1328,6 +1330,8 @@ public:
         global_stats_obj = new DRSVRSTATS(d_sm_id, warpPerSM);
 
         global_dlc_obj = new DLC(32,5,128);             // DRSVR WARNING: You should add parameters instead of constants
+
+        global_ocw_obj = new OCW_LOGIC();
 
         for (unsigned d_warp_id=0; d_warp_id<warpPerSM; d_warp_id++) {
 
