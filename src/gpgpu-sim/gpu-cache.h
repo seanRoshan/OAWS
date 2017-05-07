@@ -439,6 +439,9 @@ public:
     bool full( new_addr_type block_addr ) const;
     /// Return available mshr entries
     unsigned get_available_count () ;
+
+    /// Return miss on Flight
+    unsigned get_missOnFlight();
     /// Add or merge this access
     void add( new_addr_type block_addr, mem_fetch *mf );
     /// Returns true if cannot accept new fill responses

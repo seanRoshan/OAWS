@@ -364,6 +364,18 @@ bool mshr_table::full( new_addr_type block_addr ) const{
         return m_data.size() >= m_num_entries;
 }
 
+
+unsigned mshr_table::get_missOnFlight() {
+
+    if (smObj){
+        return smObj->get_missOnFlight();
+    }
+    else {
+        return 0;
+    }
+
+}
+
 /// DRSVR : Return available mshr entries
 unsigned mshr_table::get_available_count () {
     if (m_data.size() < m_num_entries){
@@ -462,6 +474,7 @@ void mshr_table::print() const{
 }
 
 void mshr_table::print2() const{
+    printf("----------------------------------------------------------------------\n");
     printf("MSHR contents Size:%u\n", m_data.size());
     printf("----------------------------------------------------------------------");
     for ( table::const_iterator e=m_data.begin(); e!=m_data.end(); ++e ) {
@@ -476,12 +489,15 @@ void mshr_table::print2() const{
         }
     }
     if (smObjLoaded){
+        printf("\n----------------------------------------------------------------------\n");
         smObj->print_dlc_table();
     }
+    printf("----------------------------------------------------------------------\n");
 }
 
 void mshr_table::update_oaws_status(unsigned available_in, unsigned missOnFlight_in){
     if (smObjLoaded){
+        //printf("available_in:> %u ; missOnFlight_in:> %u ;\n",available_in,missOnFlight_in);
         smObj->update_availableMSHR(available_in);
         smObj->update_missOnFlight(missOnFlight_in);
     }
@@ -777,6 +793,8 @@ void baseline_cache::cycle(){
         mem_fetch *mf = m_miss_queue.front();
         if ( !m_memport->full(mf->size(),mf->get_is_write()) ) {
             m_miss_queue.pop_front();
+            // DRSVR MISSQUEUE
+            m_mshrs.update_oaws_status(m_mshrs.get_available_count(),m_miss_queue.size());
             m_memport->push(mf);
         }
     }
@@ -895,6 +913,9 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
         m_extra_mf_fields[mf] = extra_mf_fields(block_addr, cache_index, mf->get_data_size());
         mf->set_data_size(m_config.get_line_sz());
         m_miss_queue.push_back(mf);
+        // DRSVR MISSQUEUE
+        m_mshrs.update_oaws_status(m_mshrs.get_available_count(),m_miss_queue.size());
+
         mf->set_status(m_miss_queue_status, time);
         if (!wa)
             events.push_back(READ_REQUEST_SENT);
@@ -919,6 +940,23 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
     }
 
     m_mshrs.update_oaws_status(m_mshrs.get_available_count(),m_miss_queue.size());
+
+    if (smObj){
+        if (smObj->get_sm_id()==9){
+            printf("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");
+            m_mshrs.print2();
+            printf("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");
+            std::list<mem_fetch*>::const_iterator it;
+            //mem_fetch test;
+            printf("DRSVR Miss Queue:  Miss Queue Size: %u; Available MSHR: %u ; Miss on Flight: %u;\n",m_mshrs.get_available_count(),m_miss_queue.size(), m_mshrs.get_missOnFlight());
+            for ( it = m_miss_queue.begin(); it != m_miss_queue.end(); ++it) {
+                printf("DRSVR Miss Queue: SM ID: %u ; Warp ID: %u ; PC: %u \n",(*it)->get_sid(), (*it)->get_wid(), (*it)->get_pc());
+            }
+            printf("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");
+        }
+    }
+
+
 }
 
 
@@ -926,6 +964,8 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
 void data_cache::send_write_request(mem_fetch *mf, cache_event request, unsigned time, std::list<cache_event> &events){
     events.push_back(request);
     m_miss_queue.push_back(mf);
+    // DRSVR MISSQUEUE
+    m_mshrs.update_oaws_status(m_mshrs.get_available_count(),m_miss_queue.size());
     mf->set_status(m_miss_queue_status,time);
 }
 
@@ -1039,6 +1079,8 @@ data_cache::wr_miss_wa( new_addr_type addr,
             mem_fetch *wb = m_memfetch_creator->alloc(evicted.m_block_addr,
                 m_wrbk_type,m_config.get_line_sz(),true);
             m_miss_queue.push_back(wb);
+            // DRSVR MISSQUEUE
+            m_mshrs.update_oaws_status(m_mshrs.get_available_count(),m_miss_queue.size());
             wb->set_status(m_miss_queue_status,time);
         }
         return MISS;

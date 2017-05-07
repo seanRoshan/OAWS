@@ -1123,18 +1123,24 @@ void scheduler_unit::cycle()
         //printf("%u\t", (*iter)->get_warp_id());
 
         // Don't consider warps that are not yet valid
-        if ( (*iter) == NULL || (*iter)->done_exit() ) {
-            continue;
-        }
+//        if ( (*iter) == NULL || (*iter)->done_exit() ) {
+//            continue;
+//        }
 
 
         // Don't consider warps that are not yet valid and not oaws approved
-        /*if ( (*iter) == NULL || (*iter)->done_exit() || !(*iter)->oaws_approved() ) {
+        if ( (*iter) == NULL || (*iter)->done_exit() || !(*iter)->oaws_approved() ) {
             if ( (!(*iter)->oaws_approved()) && (!(*iter)->done_exit()) && ((*iter) != NULL) && (*iter)->get_sm_id() == 9  ){
                 printf("DRSVR OAWS WARP BLOCKED: Warp ID: %u ; SM_ID: %u; PC:%u ;\n",(*iter)->get_warp_id(), (*iter)->get_sm_id(), (*iter)->get_pc());
             }
             continue;
-        }*/
+        }
+
+        if ( ((*iter)->get_sm_id() == 9) && ((*iter)->oaws_approved())){
+            std::raise(SIGINT);
+            printf("DRSVR OAWS WARP ISSUED: Warp ID: %u ; SM_ID: %u; PC:%u ;\n",(*iter)->get_warp_id(), (*iter)->get_sm_id(), (*iter)->get_pc());
+        }
+
 
 
 

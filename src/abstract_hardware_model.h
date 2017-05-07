@@ -65,6 +65,8 @@ enum FuncCache
 
 #include <string.h>
 #include <stdio.h>
+#include <csignal>
+
 
 typedef unsigned long long new_addr_type;
 typedef unsigned address_type;
@@ -1346,6 +1348,8 @@ public:
         return d_sm_id;
     }
 
+
+
     void update_histogram(unsigned input_warp_id, std::string histogramName, unsigned input_data){
         stats_obj_vector.at(input_warp_id)->update_histogram(histogramName, input_data);
         global_stats_obj->update_histogram(histogramName, input_data);
@@ -1383,6 +1387,7 @@ public:
     }
 
     void update_missOnFlight (unsigned newMissOnFlight){
+        //printf("newMissOnFlight: %u; missOnFlight:%u\n",newMissOnFlight,missOnFlight);
         missOnFlight = newMissOnFlight;
     }
 
@@ -1439,12 +1444,14 @@ public:
             return false;
         }
         else {
-            /*printf("DRSVR MSHR APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
-                    ,remainingMSHR
-                    ,availableMSHR
-                    ,missOnFlight
-                    ,active_threads
-                    ,requiredMSHR);*/
+            if ( (this->get_sm_id()==9) ){
+                printf("DRSVR MSHR APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
+                        ,remainingMSHR
+                        ,availableMSHR
+                        ,missOnFlight
+                        ,active_threads
+                        ,requiredMSHR);
+            }
             return true;
         }
 

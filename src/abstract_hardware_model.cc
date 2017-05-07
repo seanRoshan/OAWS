@@ -206,9 +206,11 @@ void warp_inst_t::generate_mem_accesses()
     case tex_space: 
         access_type = TEXTURE_ACC_R;   
         break;
-    case global_space:       
-        access_type = is_write? GLOBAL_ACC_W: GLOBAL_ACC_R;   
+    case global_space:{
+        access_type = is_write? GLOBAL_ACC_W: GLOBAL_ACC_R;
         break;
+    }
+
     case local_space:
     case param_space_local:  
         access_type = is_write? LOCAL_ACC_W: LOCAL_ACC_R;   
