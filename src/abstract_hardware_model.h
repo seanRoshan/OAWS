@@ -28,6 +28,9 @@
 #ifndef ABSTRACT_HARDWARE_MODEL_INCLUDED
 #define ABSTRACT_HARDWARE_MODEL_INCLUDED
 
+
+
+
 // Forward declarations
 class gpgpu_sim;
 class kernel_info_t;
@@ -1363,8 +1366,8 @@ public:
         global_stats_obj->print_histogram(histogramName);
     }
 
-    void update_dlc_table (unsigned input_pc, std::vector<unsigned> transaction_vector ){
-        if (transaction_vector.size()>1) { // Divergent Load
+    void update_dlc_table (unsigned input_pc, std::vector<unsigned> transaction_vector, bool isWrite ){
+        if ( (transaction_vector.size()>1) && (!isWrite)) { // Divergent Load
             global_dlc_obj->update_DLC(input_pc, transaction_vector);
         }
     }
@@ -1412,6 +1415,8 @@ public:
 
     bool missPred (unsigned input_PC, unsigned active_threads){
 
+        bool DRSVRdebug = false;
+
         unsigned remainingMSHR = availableMSHR - missOnFlight;
 
         unsigned SMR_Fraction = 2;
@@ -1432,7 +1437,7 @@ public:
 
         if ( (remainingMSHR<requiredMSHR) ){
 
-            if ( (this->get_sm_id()==9) ){
+            if ( (this->get_sm_id()==9) && DRSVRdebug ){
                 printf("DRSVR MSHR NOT APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
                         ,remainingMSHR
                         ,availableMSHR
@@ -1444,7 +1449,7 @@ public:
             return false;
         }
         else {
-            if ( (this->get_sm_id()==9) ){
+            if ( (this->get_sm_id()==9) && DRSVRdebug){
                 printf("DRSVR MSHR APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
                         ,remainingMSHR
                         ,availableMSHR

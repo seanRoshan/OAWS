@@ -32,6 +32,10 @@
 #define MAX_DEFAULT_CACHE_SIZE_MULTIBLIER 4
 // used to allocate memory that is large enough to adapt the changes in cache size across kernels
 
+
+
+
+
 const char * cache_request_status_str(enum cache_request_status status) 
 {
    static const char * static_cache_request_status_str[] = {
@@ -859,6 +863,8 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
     bool mshr_hit = m_mshrs.probe(block_addr);
     bool mshr_avail = !m_mshrs.full(block_addr);
 
+    bool DRSVRdebug = false;
+
 
     /* DRSVR
     if (!mshr_avail){
@@ -942,7 +948,7 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
     m_mshrs.update_oaws_status(m_mshrs.get_available_count(),m_miss_queue.size());
 
     if (smObj){
-        if (smObj->get_sm_id()==9){
+        if ( (smObj->get_sm_id()==9) && DRSVRdebug) {
             printf("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");
             m_mshrs.print2();
             printf("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");

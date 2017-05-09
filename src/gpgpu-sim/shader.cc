@@ -52,7 +52,8 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
     
 
-/////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
+bool DRSVRdebug = false;
 
 std::list<unsigned> shader_core_ctx::get_regs_written( const inst_t &fvt ) const
 {
@@ -991,22 +992,26 @@ void scheduler_unit::order_by_priority( bool isOAWS,
         }*/
 
 
-        bool greadyRemoved = false;
+        /*bool greadyRemoved = false;
+
         if (greedy_value->oaws_approved() == false){
             result_list.pop_back();
             greadyRemoved = true;
 
-        }
+        }*/
 
 
         typename std::vector< T >::iterator iter = temp.begin();
         for ( unsigned count = 0; count < num_warps_to_add; ++count, ++iter ) {
-            if (  (*iter != greedy_value) || greadyRemoved  ) {
+            if (  (*iter != greedy_value) /*|| greadyRemoved */ ) {
                 result_list.push_back( *iter );
+            }
+            else {
+                (*iter)->setOAWSApproved();
             }
         }
 
-        if ( (result_list.size()>0) && (result_list.at(0)->get_sm_id() == 9 )) {
+        if ( (result_list.size()>0) && (result_list.at(0)->get_sm_id() == 9 ) &&  DRSVRdebug) {
 
             printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER SORT: \n");
 
@@ -1078,7 +1083,7 @@ void scheduler_unit::order_by_priority( bool isOAWS,
     } else if ( ORDERED_PRIORITY_FUNC_ONLY == ordering ) {
 
         //DRSVR ADDED
-        printf("DRSVR: ORDERED_PRIORITY_FUNC_ONLY!\n");
+        //printf("DRSVR: ORDERED_PRIORITY_FUNC_ONLY!\n");
         exit(0);
 
 
@@ -1129,16 +1134,16 @@ void scheduler_unit::cycle()
 
 
         // Don't consider warps that are not yet valid and not oaws approved
-        if ( (*iter) == NULL || (*iter)->done_exit() || !(*iter)->oaws_approved() ) {
-            if ( (!(*iter)->oaws_approved()) && (!(*iter)->done_exit()) && ((*iter) != NULL) && (*iter)->get_sm_id() == 9  ){
+        if ( (*iter) == NULL || (*iter)->done_exit() /*|| !(*iter)->oaws_approved()*/ ) {
+            if ( (!(*iter)->oaws_approved()) && (!(*iter)->done_exit()) && ((*iter) != NULL) && (*iter)->get_sm_id() == 9 && DRSVRdebug  ){
                 printf("DRSVR OAWS WARP BLOCKED: Warp ID: %u ; SM_ID: %u; PC:%u ;\n",(*iter)->get_warp_id(), (*iter)->get_sm_id(), (*iter)->get_pc());
             }
             continue;
         }
 
-        if ( ((*iter)->get_sm_id() == 9) && ((*iter)->oaws_approved())){
+        if ( ((*iter)->get_sm_id() == 9) && ((*iter)->oaws_approved()) && DRSVRdebug){
             std::raise(SIGINT);
-            printf("DRSVR OAWS WARP ISSUED: Warp ID: %u ; SM_ID: %u; PC:%u ;\n",(*iter)->get_warp_id(), (*iter)->get_sm_id(), (*iter)->get_pc());
+            printf("DRSVR OAWS WARP PASSED: Warp ID: %u ; SM_ID: %u; PC:%u ;\n",(*iter)->get_warp_id(), (*iter)->get_sm_id(), (*iter)->get_pc());
         }
 
 
@@ -1163,12 +1168,43 @@ void scheduler_unit::cycle()
 
         //printf("DRSVR max_issue: %u \n", max_issue);
 
-        while( !warp(warp_id).waiting() && !warp(warp_id).ibuffer_empty() && (checked < max_issue) && (checked <= issued) && (issued < max_issue) ) {
+
+
+        if (((*iter)->get_sm_id() == 9) /*&& DRSVRdebug*/ ){
+            if ((*iter)->oaws_approved()){
+                printf("DRSVR OAWS WARP PASSED: Warp ID: %u ; SM_ID: %u; PC:%u ;\n",(*iter)->get_warp_id(), (*iter)->get_sm_id(), (*iter)->get_pc());
+             }
+            else{
+                printf("DRSVR OAWS WARP BLOCKED: Warp ID: %u ; SM_ID: %u; PC:%u ;\n",(*iter)->get_warp_id(), (*iter)->get_sm_id(), (*iter)->get_pc());
+            }
+
+        }
+
+
+
+        while( !warp(warp_id).waiting() && !warp(warp_id).ibuffer_empty() && (checked < max_issue) && (checked <= issued) && (issued < max_issue) && ( (*iter)->oaws_approved() || warp(warp_id).ibuffer_next_inst()->op!=LOAD_OP )  ) {
+
+
+            if ( warp(warp_id).ibuffer_next_inst()->op!=LOAD_OP ){
+                assert( (*iter)->oaws_approved() );
+            }
+
 
 
             // Shahriyar NOTE: warp_inst_t is instruction class
             const warp_inst_t *pI = warp(warp_id).ibuffer_next_inst();
             bool valid = warp(warp_id).ibuffer_next_valid();
+
+            if (!(*iter)->oaws_approved()){
+                assert( pI->op == LOAD_OP );
+            }
+
+
+
+            if ( ((*iter)->get_sm_id() == 9) && ((*iter)->oaws_approved()) && DRSVRdebug){
+                //std::raise(SIGINT);
+                printf("DRSVR OAWS WARP ISSUED: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ;\n",(*iter)->get_warp_id(), (*iter)->get_sm_id(), (*iter)->get_pc(), (*pI).op );
+            }
 
 
             bool warp_inst_issued = false;
