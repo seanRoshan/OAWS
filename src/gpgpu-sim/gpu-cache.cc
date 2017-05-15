@@ -419,6 +419,7 @@ void mshr_table::add( new_addr_type block_addr, mem_fetch *mf ){
 	if ( mf->isatomic() ) {
 		m_data[block_addr].m_has_atomic = true;
 	}
+    this->update_oaws_status(this->get_available_count(), this->get_missOnFlight());
 }
 
 /// Accept a new cache fill response: mark entry ready for processing
@@ -443,6 +444,7 @@ mem_fetch *mshr_table::next_access(){
         m_data.erase(block_addr);
         m_current_response.pop_front();
     }
+    this->update_oaws_status(this->get_available_count(), this->get_missOnFlight());
     return result;
 }
 
@@ -793,6 +795,7 @@ bool baseline_cache::bandwidth_management::fill_port_free() const
 
 /// Sends next request to lower level of memory
 void baseline_cache::cycle(){
+    printf(" CYCLE UNIT!\n");
     if ( !m_miss_queue.empty() ) {
         mem_fetch *mf = m_miss_queue.front();
         if ( !m_memport->full(mf->size(),mf->get_is_write()) ) {
@@ -938,9 +941,9 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
         }
         else {
             unsigned replayCount = m_mshrs.occlusionReplayed();
-            printf("DRSVR MSHR OCCLUSION REPLAY:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ; Replay:%u", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str(), replayCount );
+            /*printf("DRSVR MSHR OCCLUSION REPLAY:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ; Replay:%u", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str(), replayCount );
             mf->get_inst().print_insn2();
-            printf("\n");
+            printf("\n");*/
         }
 
     }
@@ -948,7 +951,7 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
     m_mshrs.update_oaws_status(m_mshrs.get_available_count(),m_miss_queue.size());
 
     if (smObj){
-        if ( (smObj->get_sm_id()==9) && DRSVRdebug) {
+        if ( /*(smObj->get_sm_id()==9) &&*/ DRSVRdebug) {
             printf("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");
             m_mshrs.print2();
             printf("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");
@@ -1346,6 +1349,7 @@ enum cache_request_status tex_cache::access( new_addr_type addr, mem_fetch *mf,
 }
 
 void tex_cache::cycle(){
+    printf(" CYCLE UNIT!\n");
     // send next request to lower level of memory
     if ( !m_request_fifo.empty() ) {
         mem_fetch *mf = m_request_fifo.peek();

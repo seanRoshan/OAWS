@@ -410,6 +410,7 @@ public:
 
     static bool sort_warps_by_oldest_dynamic_id(shd_warp_t* lhs, shd_warp_t* rhs);
     static bool sort_warps_by_oldest_dynamic_id_oaws(shd_warp_t* lhs, shd_warp_t* rhs);
+    static bool sort_warps_by_oldest_dynamic_id_oaws2(shd_warp_t* lhs, shd_warp_t* rhs);
 
     // Derived classes can override this function to populate
     // m_supervised_warps with their scheduling policies

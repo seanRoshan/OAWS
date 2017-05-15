@@ -1419,7 +1419,7 @@ public:
 
         unsigned remainingMSHR = availableMSHR - missOnFlight;
 
-        unsigned SMR_Fraction = 2;
+        unsigned SMR_Fraction = 1;
         unsigned fixedActive_threads = 1;
         unsigned requiredMSHR = 0;
 
@@ -1437,7 +1437,7 @@ public:
 
         if ( (remainingMSHR<requiredMSHR) ){
 
-            if ( (this->get_sm_id()==9) && DRSVRdebug ){
+            if ( /*(this->get_sm_id()==9) &&*/ DRSVRdebug ){
                 printf("DRSVR MSHR NOT APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
                         ,remainingMSHR
                         ,availableMSHR
@@ -1449,7 +1449,7 @@ public:
             return false;
         }
         else {
-            if ( (this->get_sm_id()==9) && DRSVRdebug){
+            if (/* (this->get_sm_id()==9) &&*/ DRSVRdebug){
                 printf("DRSVR MSHR APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
                         ,remainingMSHR
                         ,availableMSHR

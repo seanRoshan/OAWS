@@ -405,6 +405,9 @@ void warp_inst_t::generate_mem_accesses()
 
 void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type access_type )
 {
+    bool DRSVRdebug = false;
+
+
     // see the CUDA manual where it discusses coalescing rules before reading this
     unsigned segment_size = 0;
     unsigned warp_parts = m_config->mem_warp_parts;
@@ -430,12 +433,12 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
     smObj->update_histogram(m_warp_id,"Memory Type",space.get_type());*/
 
 
-    if ( (m_sm_id==9) /*&& (m_warp_id==25)*/) {
+    /*if ( (m_sm_id==9) *//*&& (m_warp_id==25)*//*) {
         //if ( (!is_write) && (pc==272) && (m_sm_id==5) ) {
         printf("\n##########################################################################################\n");
         printf("DRSVR: warp_parts: %u ; data_size: %u ; segment_size: %u ; subwarp_size: %u active_mask: %s ;\n"
                 , warp_parts, data_size, segment_size, subwarp_size, m_warp_active_mask.to_string().c_str());
-    }
+    }*/
 
     /*
     // DRSVR subwarp_size: 32 = m_config->warp_size 32 / warp_parts 1
@@ -555,7 +558,7 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
 
         smObj->update_dlc_table(pc,transactions_block_address_vector, is_write);
 
-        if ( (m_sm_id==9) /*&& (m_warp_id==0)*/ ) {
+        if ( DRSVRdebug /*(m_sm_id==9)*/ /*&& (m_warp_id==0)*/ ) {
             smObj->print_dlc_table();
             //smObj->print_dlc_transaction_history();
         }
@@ -595,8 +598,10 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
 
 void warp_inst_t::memory_coalescing_arch_13_atomic( bool is_write, mem_access_type access_type )
 {
+   bool DRSVRdebug = false;
 
-   assert(space.get_type() == global_space); // Atomics allowed only for global memory
+
+    assert(space.get_type() == global_space); // Atomics allowed only for global memory
 
    // see the CUDA manual where it discusses coalescing rules before reading this
    unsigned segment_size = 0;
