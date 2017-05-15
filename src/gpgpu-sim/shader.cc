@@ -1815,7 +1815,7 @@ void shader_core_ctx::execute()
 	}
     for( unsigned n=0; n < m_num_function_units; n++ ) {
         unsigned multiplier = m_fu[n]->clock_multiplier();
-        for( unsigned c=0; c < multiplier; c++ ) 
+        for( unsigned c=0; c < multiplier; c++ )
             m_fu[n]->cycle();
         m_fu[n]->active_lanes_in_pipeline();
         enum pipeline_stage_name_t issue_port = m_issue_port[n];
@@ -1992,12 +1992,16 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
 
 mem_stage_stall_type ldst_unit::process_memory_access_queue( cache_t *cache, warp_inst_t &inst )
 {
+    printf("DRSVR PROCESS MEMORY ACCESS QUEUE!\n");
     mem_stage_stall_type result = NO_RC_FAIL;
     if( inst.accessq_empty() )
         return result;
 
-    if( !cache->data_port_free() ) 
-        return DATA_PORT_STALL; 
+    if( !cache->data_port_free() ){
+        printf("DRSVR DATA_PORT_STALL!\n");
+        return DATA_PORT_STALL;
+    }
+
 
     //const mem_access_t &access = inst.accessq_back();
 
@@ -2005,8 +2009,10 @@ mem_stage_stall_type ldst_unit::process_memory_access_queue( cache_t *cache, war
     // if (m_sid==5) { inst.accessq_print(); }
 
     mem_fetch *mf = m_mf_allocator->alloc(inst,inst.accessq_back());
+
     std::list<cache_event> events;
     enum cache_request_status status = cache->access(mf->get_addr(),mf,gpu_sim_cycle+gpu_tot_sim_cycle,events);
+
     return process_cache_access( cache, mf->get_addr(), inst, events, mf, status );
 }
 

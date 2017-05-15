@@ -161,8 +161,14 @@ void tag_array::init( int core_id, int type_id )
 
 enum cache_request_status tag_array::probe( new_addr_type addr, unsigned &idx ) const {
     //assert( m_config.m_write_policy == READ_ONLY );
+
+    printf("DRSVR Probe Tag Array!\n");
+
+
     unsigned set_index = m_config.set_index(addr);
     new_addr_type tag = m_config.tag(addr);
+
+    //printf("DRSVR BLOCK_ADDR: %u ; set_index:%u ; tag: %u ; m_config.m_assoc:%u ;\n" ,addr ,set_index, tag, m_config.m_assoc);
 
     unsigned invalid_line = (unsigned)-1;
     unsigned valid_line = (unsigned)-1;
@@ -171,17 +177,23 @@ enum cache_request_status tag_array::probe( new_addr_type addr, unsigned &idx ) 
     bool all_reserved = true;
 
     // check for hit or pending hit
+
     for (unsigned way=0; way<m_config.m_assoc; way++) {
         unsigned index = set_index*m_config.m_assoc+way;
+
         cache_block_t *line = &m_lines[index];
+
         if (line->m_tag == tag) {
             if ( line->m_status == RESERVED ) {
+                printf("DRSVR HIT_RESERVED:  BLOCK_ADDR: %u ; way:%u ; set_index:%u ; tag: %u ; index:%u ;\n" ,addr, way ,set_index, tag, index);
                 idx = index;
                 return HIT_RESERVED;
             } else if ( line->m_status == VALID ) {
+                printf("DRSVR HIT, VALID:  BLOCK_ADDR: %u ; way:%u ; set_index:%u ; tag: %u ; index:%u ;\n" ,addr, way ,set_index, tag, index);
                 idx = index;
                 return HIT;
             } else if ( line->m_status == MODIFIED ) {
+                printf("DRSVR HIT, MODIFIED:  BLOCK_ADDR: %u ; way:%u ; set_index:%u ; tag: %u ; index:%u ;\n" ,addr, way ,set_index, tag, index);
                 idx = index;
                 return HIT;
             } else {
@@ -209,7 +221,9 @@ enum cache_request_status tag_array::probe( new_addr_type addr, unsigned &idx ) 
         }
     }
     if ( all_reserved ) {
-        assert( m_config.m_alloc_policy == ON_MISS ); 
+        assert( m_config.m_alloc_policy == ON_MISS );
+        printf("DRSVR RESERVATION_FAIL: BLOCK_ADDR: %u ; tag: %u ; set_index:%u ; index:%u;\n", addr, tag, set_index);
+        //printf("DRSVR RESERVATION_FAIL: BLOCK_ADDR: %u ; set_index:%u ; tag: %u ; index:%u ;\n" ,addr ,set_index, tag, index);
         return RESERVATION_FAIL; // miss and not enough space in cache to allocate on miss
     }
 
@@ -217,7 +231,13 @@ enum cache_request_status tag_array::probe( new_addr_type addr, unsigned &idx ) 
         idx = invalid_line;
     } else if ( valid_line != (unsigned)-1) {
         idx = valid_line;
-    } else abort(); // if an unreserved block exists, it is either invalid or replaceable 
+    } else {
+        abort();
+        printf("DRSVR probe() abort():  BLOCK_ADDR: %u ; set_index:%u ; tag: %u ;\n" ,addr ,set_index, tag);
+    } // if an unreserved block exists, it is either invalid or replaceable
+
+
+    printf("DRSVR MISS:  BLOCK_ADDR: %u ; set_index:%u ; tag: %u ;\n" ,addr ,set_index, tag);
 
     return MISS;
 }
@@ -1041,6 +1061,7 @@ data_cache::wr_miss_wa( new_addr_type addr,
                         unsigned time, std::list<cache_event> &events,
                         enum cache_request_status status )
 {
+    printf("DRSVR wr_miss_wa!\n");
     new_addr_type block_addr = m_config.block_addr(addr);
 
     // Write allocate, maximum 3 requests (write miss, read request, write back request)
@@ -1151,6 +1172,7 @@ data_cache::rd_miss_base( new_addr_type addr,
                           unsigned time,
                           std::list<cache_event> &events,
                           enum cache_request_status status ){
+    printf("DRSVR rd_miss_base:\n");
     if(miss_queue_full(1))
         // cannot handle request this cycle
         // (might need to generate two requests)
@@ -1160,7 +1182,7 @@ data_cache::rd_miss_base( new_addr_type addr,
     bool do_miss = false;
     bool wb = false;
     cache_block_t evicted;
-    //printf("DRSVR rd_miss_base:\n");
+
     send_read_request( addr,
                        block_addr,
                        cache_index,
@@ -1187,6 +1209,7 @@ read_only_cache::access( new_addr_type addr,
                          unsigned time,
                          std::list<cache_event> &events )
 {
+    printf("DRSVR READ_ONLY CACHE ACCESS \n");
     assert( mf->get_data_size() <= m_config.get_line_sz());
     assert(m_config.m_write_policy == READ_ONLY);
     assert(!mf->get_is_write());
@@ -1230,7 +1253,12 @@ data_cache::process_tag_probe( bool wr,
     // data_cache constructor to reflect the corresponding cache configuration
     // options. Function pointers were used to avoid many long conditional
     // branches resulting from many cache configuration options.
+
+
+    //printf("DRSVR PROCESS TAG PROBE! \t");
+
     cache_request_status access_status = probe_status;
+
     if(wr){ // Write
         if(probe_status == HIT){
             access_status = (this->*m_wr_hit)( addr,
@@ -1247,7 +1275,7 @@ data_cache::process_tag_probe( bool wr,
                                       cache_index,
                                       mf, time, events, probe_status );
         }else if ( probe_status != RESERVATION_FAIL ) {
-            //printf("DRSVR process_tag_probe \t");
+            printf("DRSVR process_tag_probe Miss nad not ReservationFail \t");
             access_status = (this->*m_rd_miss)( addr,
                                        cache_index,
                                        mf, time, events, probe_status );
@@ -1269,11 +1297,16 @@ data_cache::access( new_addr_type addr,
                     unsigned time,
                     std::list<cache_event> &events )
 {
-    //printf("DRSVR access \t");
+    // DRSVR
+    printf("ACCESS! \n");
+    mf->print2();
+
     assert( mf->get_data_size() <= m_config.get_line_sz());
     bool wr = mf->get_is_write();
+
     new_addr_type block_addr = m_config.block_addr(addr);
     unsigned cache_index = (unsigned)-1;
+
     enum cache_request_status probe_status
         = m_tag_array->probe( block_addr, cache_index );
     enum cache_request_status access_status
@@ -1293,7 +1326,8 @@ l1_cache::access( new_addr_type addr,
                   unsigned time,
                   std::list<cache_event> &events )
 {
-    //printf("DRSVR l1 cache request status \t");
+    printf("-----------------------------------------------------------------\n");
+    printf("DRSVR L1 CACHE ");
     return data_cache::access( addr, mf, time, events );
 }
 
@@ -1306,6 +1340,7 @@ l2_cache::access( new_addr_type addr,
                   unsigned time,
                   std::list<cache_event> &events )
 {
+    printf("DRSVR L2 CACHE ");
     return data_cache::access( addr, mf, time, events );
 }
 

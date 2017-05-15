@@ -275,6 +275,7 @@ public:
     }
     new_addr_type block_addr( new_addr_type addr ) const
     {
+        //printf("DRSVR m_line_sz:%u ; ~(m_line_sz-1): %u  ; addr : %u ; addr & ~(m_line_sz-1): %u\n", m_line_sz, ~(m_line_sz-1), addr, addr & ~(m_line_sz-1));
         return addr & ~(m_line_sz-1);
     }
     FuncCache get_cache_status() {return cache_status;}
