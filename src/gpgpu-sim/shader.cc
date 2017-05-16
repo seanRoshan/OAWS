@@ -1961,36 +1961,20 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
 {
 
 
-    if (smObj->get_sm_id()==13){
+
+    if (DRSVRdebug){
         printf("DRSVR process_cache_access! \n");
         printf("Memory Request:> Warp ID/SM ID/PC:[%u,%u,%u]\t",mf->get_wid(), mf->get_sid(), mf->get_pc());
-
-        if (smObj){
-            if (status == HIT){
-                printf("HIT! \t");
-                mf->print2();
-                inst.accessq_print();
-                smObj->global_FCL_obj->update_FCLUnit(mf->get_wid(),mf->get_sid(),mf->get_pc(),inst.accessq_count(),1);
-            }
-            else if (status == MISS)  {
-                printf("MISS! \t");
-                mf->print2();
-                inst.accessq_print();
-                smObj->global_FCL_obj->update_FCLUnit(mf->get_wid(),mf->get_sid(),mf->get_pc(),inst.accessq_count(),0);
-            }
-            else {
-                printf("SOMETHING ELSE! \t");
-                mf->print2();
-                inst.accessq_print();
-                smObj->global_FCL_obj->update_FCLUnit(mf->get_wid(),mf->get_sid(),mf->get_pc(),inst.accessq_count(),0);
-            }
-
-        }
-
     }
 
-
-
+    if (smObj){
+        if (DRSVRdebug){
+            mf->print2();
+            inst.accessq_print();
+        }
+        bool FCLstatus = smObj->global_FCL_obj->update_FCLUnit(mf->get_wid(),mf->get_sid(),mf->get_pc(),inst.accessq_count(),status);
+        smObj->updateFCL(FCLstatus);
+    }
 
     mem_stage_stall_type result = NO_RC_FAIL;
     bool write_sent = was_write_sent(events);

@@ -69,6 +69,7 @@ enum FuncCache
 #include <string.h>
 #include <stdio.h>
 #include <csignal>
+#include <bitset>
 
 
 typedef unsigned long long new_addr_type;
@@ -1096,6 +1097,8 @@ private:
 
     bool Div;
     bool FCL;
+    std::bitset<64> SetBitSet;
+
 
     unsigned Set;
     unsigned Acc;
@@ -1125,34 +1128,54 @@ private:
     }
 
 
+    void OCW_updateSet(unsigned set_in){
+        SetBitSet.set(set_in);
+    }
+
+    void OCW_resetSet(){
+        SetBitSet.reset();
+    }
+
+    unsigned OCW_getSetTouched(){
+        return SetBitSet.count();
+    }
+
     void OCW_Estimation_Logic (bool debugMode){
-        calculateDelta();
 
-        if (debugMode){
-            printf("DRSVR OCW LOGIC BEGIN: FCL:%u ; CNT:%u ; Delta:%u; OCW:%u ;\n",FCL, CNT, Delta, OCW);
-        }
 
-        if (FCL){
-            CNT++;
-            if ( (CNT==CMAX) && (OCW<WMAX)){
-                OCW++;
-                CNT=0;
+        if (Div){
+            calculateDelta();
+
+            // Should be a divergent Load
+
+
+            if (debugMode){
+                printf("DRSVR OCW LOGIC BEGIN: FCL:%u ; CNT:%u ; Delta:%u; OCW:%u ;\n",FCL, CNT, Delta, OCW);
             }
-        }
-        else {
-            if (CNT > Delta) {
-                CNT -= Delta;
-            } else {
-                CNT = 0;
-                if (OCW > 2) {
-                    OCW--;
+
+            if (FCL){
+                CNT++;
+                if ( (CNT==CMAX) && (OCW<WMAX)){
+                    OCW++;
+                    CNT=0;
                 }
             }
-        }
+            else {
+                if (CNT > Delta) {
+                    CNT -= Delta;
+                } else {
+                    CNT = 0;
+                    if (OCW > 2) {
+                        OCW--;
+                    }
+                }
+            }
 
-        if (debugMode){
-            printf("DRSVR OCW LOGIC END: FCL:%u ; CNT:%u ; Delta:%u; OCW:%u ;\n",FCL, CNT, Delta, OCW);
+            if (debugMode){
+                printf("DRSVR OCW LOGIC END: FCL:%u ; CNT:%u ; Delta:%u; OCW:%u ;\n",FCL, CNT, Delta, OCW);
+            }
         }
+        
     }
 
 
@@ -1161,7 +1184,6 @@ public:
     OCW_LOGIC(){
         Div = false;
         FCL = false;
-        Set = 0;
         Acc = 0;
         OCW = 2;
     }
@@ -1182,10 +1204,10 @@ public:
         return FCL;
     }
 
-    void setInfoSetAndAcc (unsigned in_Set, unsigned in_Acc){
+    /*void setInfoSetAndAcc (unsigned in_Set, unsigned in_Acc){
         Set = in_Set;
         Acc = in_Acc;
-    }
+    }*/
 
     /*void getNumberOfTouchedSets (){
         return Set;
@@ -1310,6 +1332,8 @@ class FCLUnit {
 
 private:
 
+    bool debugMode = false;
+
     bool startTracking;
 
     unsigned PC;
@@ -1335,8 +1359,42 @@ private:
         Counter = 0;
     }
 
-    void updateStatus(unsigned status, unsigned WARP_ID_IN, unsigned SM_ID_IN, unsigned PC_IN){
+    bool analiyzeStatus(unsigned status){
+        switch (status) {
+            case 0:{
+                if (debugMode){
+                    printf("DRSVR HIT STATUS!\n");
+                }
+                return true;
+                break;
+            }
+            case 1:{
+                if (debugMode){
+                    printf("DRSVR HIT_RESERVED STATUS!\n");
+                }
+                return false;
+                break;
+            }
+            case 2:{
+                if (debugMode){
+                    printf("DRSVR MISS STATUS!\n");
+                }
+                return false;
+                break;
+            }
+            case 3:{
+                if (debugMode){
+                    printf("DRSVR RESERVATION FAIL STATUS!\n");
+                }
+                return false;
+                break;
+            }
+        }
+    }
+
+    void updateStatus(unsigned status_in, unsigned WARP_ID_IN, unsigned SM_ID_IN, unsigned PC_IN){
         this->checkInfo(WARP_ID_IN, SM_ID_IN, PC_IN);
+        bool status = this->analiyzeStatus(status_in);
         Counter++;
         if (status == 0){
             MISS_COUNT++;
@@ -1365,7 +1423,9 @@ public:
         if (!startTracking){
             // START TRACKING
             this->resetStat();
-            printf("DRSVR START FCLUNIT TRACKING!\n");
+            if (debugMode){
+                printf("DRSVR START FCLUNIT TRACKING!\n");
+            }
             startTracking = true;
             PC = PC_IN;
             WARPID = WARP_ID_IN;
@@ -1375,10 +1435,16 @@ public:
 
 
         updateStatus(status, WARP_ID_IN, SM_ID_IN, PC_IN);
-        this->print();
+
+        if (debugMode){
+            this->print();
+        }
+
 
         if (Counter==LOAD_COUNT){
-            printf("DRSVR END FCLUNIT TRACKING!\n");
+            if (debugMode){
+                printf("DRSVR END FCLUNIT TRACKING!\n");
+            }
             startTracking = false;
         }
 
@@ -1397,6 +1463,15 @@ public:
                 ,WARPID ,SMID, PC
                 ,Counter, LOAD_COUNT ,MISS_COUNT, HIT_COUNT
         );
+    }
+
+    bool isDivergent(){
+        return (LOAD_COUNT>1);
+    }
+
+    bool isDone(){
+        assert(this->isDivergent());
+        return (!startTracking);
     }
 };
 
@@ -1421,7 +1496,6 @@ private:
         unsigned missOnFlight;
         unsigned availableMSHR;
         bool  mshrStatsInitialized = false;
-
 
 
 
@@ -1589,6 +1663,15 @@ public:
             return true;
         }
     }
+
+    void updateFCL(bool status){
+        if (global_FCL_obj->isDivergent() && global_FCL_obj->isDone()){
+            printf("DRSVR UPDATE FCL: %u->%u\n", global_ocw_obj->getFCL(), status);
+            global_ocw_obj->isLoadFullyCached(status);
+            global_ocw_obj->isLoadDivergent(global_FCL_obj->isDivergent());
+        }
+    }
+
 
 };
 

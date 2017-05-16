@@ -1173,7 +1173,7 @@ data_cache::rd_miss_base( new_addr_type addr,
                           unsigned time,
                           std::list<cache_event> &events,
                           enum cache_request_status status ){
-    printf("DRSVR rd_miss_base:\n");
+    //printf("DRSVR rd_miss_base:\n");
     if(miss_queue_full(1))
         // cannot handle request this cycle
         // (might need to generate two requests)
@@ -1276,7 +1276,7 @@ data_cache::process_tag_probe( bool wr,
                                       cache_index,
                                       mf, time, events, probe_status );
         }else if ( probe_status != RESERVATION_FAIL ) {
-            printf("DRSVR process_tag_probe Miss nad not ReservationFail \t");
+            //printf("DRSVR process_tag_probe Miss nad not ReservationFail \t");
             access_status = (this->*m_rd_miss)( addr,
                                        cache_index,
                                        mf, time, events, probe_status );
