@@ -701,7 +701,7 @@ void shader_core_ctx::fetch()
     }
 
     //printf("DRSVR m_L1I: \n");
-    printf("DRSVR L1I");
+    //printf("DRSVR L1I");
     m_L1I->cycle();
 
     if( m_L1I->access_ready() ) {
@@ -1960,6 +1960,38 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
                                  enum cache_request_status status )
 {
 
+
+    if (smObj->get_sm_id()==13){
+        printf("DRSVR process_cache_access! \n");
+        printf("Memory Request:> Warp ID/SM ID/PC:[%u,%u,%u]\t",mf->get_wid(), mf->get_sid(), mf->get_pc());
+
+        if (smObj){
+            if (status == HIT){
+                printf("HIT! \t");
+                mf->print2();
+                inst.accessq_print();
+                smObj->global_FCL_obj->update_FCLUnit(mf->get_wid(),mf->get_sid(),mf->get_pc(),inst.accessq_count(),1);
+            }
+            else if (status == MISS)  {
+                printf("MISS! \t");
+                mf->print2();
+                inst.accessq_print();
+                smObj->global_FCL_obj->update_FCLUnit(mf->get_wid(),mf->get_sid(),mf->get_pc(),inst.accessq_count(),0);
+            }
+            else {
+                printf("SOMETHING ELSE! \t");
+                mf->print2();
+                inst.accessq_print();
+                smObj->global_FCL_obj->update_FCLUnit(mf->get_wid(),mf->get_sid(),mf->get_pc(),inst.accessq_count(),0);
+            }
+
+        }
+
+    }
+
+
+
+
     mem_stage_stall_type result = NO_RC_FAIL;
     bool write_sent = was_write_sent(events);
     bool read_sent = was_read_sent(events);
@@ -1981,6 +2013,8 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
         assert( !write_sent );
         delete mf;
     } else {
+
+
         assert( status == MISS || status == HIT_RESERVED );
         //inst.clear_active( access.get_warp_mask() ); // threads in mf writeback when mf returns
         inst.accessq_pop_back();
@@ -1992,7 +2026,7 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
 
 mem_stage_stall_type ldst_unit::process_memory_access_queue( cache_t *cache, warp_inst_t &inst )
 {
-    printf("DRSVR PROCESS MEMORY ACCESS QUEUE!\n");
+    //printf("DRSVR PROCESS MEMORY ACCESS QUEUE!\n");
     mem_stage_stall_type result = NO_RC_FAIL;
     if( inst.accessq_empty() )
         return result;
@@ -2049,7 +2083,7 @@ bool ldst_unit::texture_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail,
 
 bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type )
 {
-   printf("DRSVR memory_cycle!\n");
+   //printf("DRSVR memory_cycle!\n");
    if( inst.empty() || 
        ((inst.space.get_type() != global_space) &&
         (inst.space.get_type() != local_space) &&
@@ -2476,7 +2510,7 @@ void ldst_unit::issue( register_set &reg_set )
 void ldst_unit::cycle()
 {
    //if (m_sid==5) { printf("DRSVR  ldst_unit!\n"); }
-   printf("DRSVR LDST UNIT!\n");
+   //printf("DRSVR LDST UNIT!\n");
    writeback();
    m_operand_collector->step();
    for( unsigned stage=0; (stage+1)<m_pipeline_depth; stage++ ) 
@@ -2527,14 +2561,14 @@ void ldst_unit::cycle()
        }
    }
 
-   printf("DRSVR L1T");
+   //printf("DRSVR L1T");
    m_L1T->cycle();
-   printf("DRSVR L1C");
+   //printf("DRSVR L1C");
    m_L1C->cycle();
 
 
    if( m_L1D ) {
-       printf("DRSVR L1D");
+       //printf("DRSVR L1D");
        m_L1D->cycle();
    }
 
@@ -3878,9 +3912,9 @@ simt_core_cluster::simt_core_cluster( class gpgpu_sim *gpu,
 
 void simt_core_cluster::core_cycle()
 {
-    printf("DRSVR m_core_sim_order_size:%u\n",m_core_sim_order.size());
+    //printf("DRSVR m_core_sim_order_size:%u\n",m_core_sim_order.size());
     for( std::list<unsigned>::iterator it = m_core_sim_order.begin(); it != m_core_sim_order.end(); ++it ) {
-        printf("DRSVR m_core[%u]\n",it);
+        //printf("DRSVR m_core[%u]\n",it);
         m_core[*it]->cycle();
     }
 

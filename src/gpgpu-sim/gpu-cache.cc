@@ -162,7 +162,7 @@ void tag_array::init( int core_id, int type_id )
 enum cache_request_status tag_array::probe( new_addr_type addr, unsigned &idx ) const {
     //assert( m_config.m_write_policy == READ_ONLY );
 
-    printf("DRSVR Probe Tag Array!\n");
+    //printf("DRSVR Probe Tag Array!\n");
 
 
     unsigned set_index = m_config.set_index(addr);
@@ -185,15 +185,15 @@ enum cache_request_status tag_array::probe( new_addr_type addr, unsigned &idx ) 
 
         if (line->m_tag == tag) {
             if ( line->m_status == RESERVED ) {
-                printf("DRSVR HIT_RESERVED:  BLOCK_ADDR: %u ; way:%u ; set_index:%u ; tag: %u ; index:%u ;\n" ,addr, way ,set_index, tag, index);
+                //printf("DRSVR HIT_RESERVED:  BLOCK_ADDR: %u ; way:%u ; set_index:%u ; tag: %u ; index:%u ;\n" ,addr, way ,set_index, tag, index);
                 idx = index;
                 return HIT_RESERVED;
             } else if ( line->m_status == VALID ) {
-                printf("DRSVR HIT, VALID:  BLOCK_ADDR: %u ; way:%u ; set_index:%u ; tag: %u ; index:%u ;\n" ,addr, way ,set_index, tag, index);
+                //printf("DRSVR HIT, VALID:  BLOCK_ADDR: %u ; way:%u ; set_index:%u ; tag: %u ; index:%u ;\n" ,addr, way ,set_index, tag, index);
                 idx = index;
                 return HIT;
             } else if ( line->m_status == MODIFIED ) {
-                printf("DRSVR HIT, MODIFIED:  BLOCK_ADDR: %u ; way:%u ; set_index:%u ; tag: %u ; index:%u ;\n" ,addr, way ,set_index, tag, index);
+                //printf("DRSVR HIT, MODIFIED:  BLOCK_ADDR: %u ; way:%u ; set_index:%u ; tag: %u ; index:%u ;\n" ,addr, way ,set_index, tag, index);
                 idx = index;
                 return HIT;
             } else {
@@ -815,7 +815,8 @@ bool baseline_cache::bandwidth_management::fill_port_free() const
 
 /// Sends next request to lower level of memory
 void baseline_cache::cycle(){
-    printf(" CYCLE UNIT!\n");
+    //printf(" CYCLE UNIT!\n");
+    //printf("%s\n",m_name.c_str());
     if ( !m_miss_queue.empty() ) {
         mem_fetch *mf = m_miss_queue.front();
         if ( !m_memport->full(mf->size(),mf->get_is_write()) ) {
@@ -1209,7 +1210,7 @@ read_only_cache::access( new_addr_type addr,
                          unsigned time,
                          std::list<cache_event> &events )
 {
-    printf("DRSVR READ_ONLY CACHE ACCESS \n");
+    //printf("DRSVR READ_ONLY CACHE ACCESS \n");
     assert( mf->get_data_size() <= m_config.get_line_sz());
     assert(m_config.m_write_policy == READ_ONLY);
     assert(!mf->get_is_write());
@@ -1298,8 +1299,10 @@ data_cache::access( new_addr_type addr,
                     std::list<cache_event> &events )
 {
     // DRSVR
-    printf("ACCESS! \n");
-    mf->print2();
+    //printf("ACCESS! \n");
+    //mf->print2();
+
+    
 
     assert( mf->get_data_size() <= m_config.get_line_sz());
     bool wr = mf->get_is_write();
@@ -1326,8 +1329,8 @@ l1_cache::access( new_addr_type addr,
                   unsigned time,
                   std::list<cache_event> &events )
 {
-    printf("-----------------------------------------------------------------\n");
-    printf("DRSVR L1 CACHE ");
+    //printf("-----------------------------------------------------------------\n");
+    //printf("DRSVR L1 CACHE ");
     return data_cache::access( addr, mf, time, events );
 }
 
@@ -1340,7 +1343,7 @@ l2_cache::access( new_addr_type addr,
                   unsigned time,
                   std::list<cache_event> &events )
 {
-    printf("DRSVR L2 CACHE ");
+    //printf("DRSVR L2 CACHE ");
     return data_cache::access( addr, mf, time, events );
 }
 
@@ -1384,7 +1387,7 @@ enum cache_request_status tex_cache::access( new_addr_type addr, mem_fetch *mf,
 }
 
 void tex_cache::cycle(){
-    printf(" CYCLE UNIT!\n");
+    //printf(" CYCLE UNIT!\n");
     // send next request to lower level of memory
     if ( !m_request_fifo.empty() ) {
         mem_fetch *mf = m_request_fifo.peek();

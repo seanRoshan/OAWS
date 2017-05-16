@@ -1306,6 +1306,103 @@ public:
 };
 
 
+class FCLUnit {
+
+private:
+
+    bool startTracking;
+
+    unsigned PC;
+    unsigned WARPID;
+    unsigned SMID;
+
+    unsigned LOAD_COUNT;
+    unsigned MISS_COUNT;
+    unsigned HIT_COUNT;
+
+    unsigned Counter;
+
+    void resetStat() {
+        startTracking = false;
+        PC = (unsigned)-1;
+        WARPID = (unsigned)-1;
+        SMID = (unsigned)-1;
+
+        LOAD_COUNT = 0;
+        MISS_COUNT = 0;
+        HIT_COUNT = 0;
+
+        Counter = 0;
+    }
+
+    void updateStatus(unsigned status, unsigned WARP_ID_IN, unsigned SM_ID_IN, unsigned PC_IN){
+        this->checkInfo(WARP_ID_IN, SM_ID_IN, PC_IN);
+        Counter++;
+        if (status == 0){
+            MISS_COUNT++;
+        }
+        else {
+            HIT_COUNT++;
+        }
+    }
+
+    void checkInfo(unsigned WARP_ID_IN, unsigned SM_ID_IN, unsigned PC_IN){
+        assert(WARP_ID_IN==WARPID);
+        assert(SM_ID_IN==SMID);
+        assert(PC_IN==PC);
+    }
+
+
+
+
+public:
+
+    FCLUnit(){
+        this->resetStat();
+    }
+
+    bool update_FCLUnit(unsigned WARP_ID_IN, unsigned SM_ID_IN, unsigned PC_IN, unsigned LOAD_COUNT_IN, unsigned status){
+        if (!startTracking){
+            // START TRACKING
+            this->resetStat();
+            printf("DRSVR START FCLUNIT TRACKING!\n");
+            startTracking = true;
+            PC = PC_IN;
+            WARPID = WARP_ID_IN;
+            SMID = SM_ID_IN;
+            LOAD_COUNT = LOAD_COUNT_IN;
+        }
+
+
+        updateStatus(status, WARP_ID_IN, SM_ID_IN, PC_IN);
+        this->print();
+
+        if (Counter==LOAD_COUNT){
+            printf("DRSVR END FCLUNIT TRACKING!\n");
+            startTracking = false;
+        }
+
+        if (MISS_COUNT==0){
+            return true;
+        }
+        else {
+            return false;
+        }
+
+    }
+
+    void print(){
+        printf("DRSVR FCU UNIT! START:%u; WarpID/SMID/PC:[%u;%u;%u] ; Processed:%u/%u ; MISS_COUNT:%u; HIT_COUNT:%u\n"
+                ,startTracking
+                ,WARPID ,SMID, PC
+                ,Counter, LOAD_COUNT ,MISS_COUNT, HIT_COUNT
+        );
+    }
+};
+
+
+
+
 class DRSVR {
 
 private:
@@ -1326,7 +1423,12 @@ private:
         bool  mshrStatsInitialized = false;
 
 
+
+
+
 public:
+
+    FCLUnit *global_FCL_obj;
 
     DRSVR(unsigned input_sm_id) {
 
@@ -1344,6 +1446,8 @@ public:
             stats_obj_vector.push_back(statsObj_temp);
 
         }
+
+        global_FCL_obj = new FCLUnit();
 
     }
 
@@ -1366,8 +1470,10 @@ public:
         global_stats_obj->print_histogram(histogramName);
     }
 
-    void update_dlc_table (unsigned input_pc, std::vector<unsigned> transaction_vector, bool isWrite ){
+    void update_dlc_table (unsigned input_warpid, unsigned input_sm_id, unsigned input_pc, std::vector<unsigned> transaction_vector, bool isWrite ){
         if ( (transaction_vector.size()>1) && (!isWrite)) { // Divergent Load
+
+            printf("Divergent Load: Warp ID/ SM ID/PC:[%u;%u;%u] Count:%u\n",input_warpid, input_sm_id, input_pc, transaction_vector.size());
             global_dlc_obj->update_DLC(input_pc, transaction_vector);
         }
     }
@@ -1752,12 +1858,19 @@ public:
 
     void accessq_print(){
         unsigned i = 0;
-        printf("\n------------------------------- Memory Access Queue --------------------------------\n");
+        printf("\n-------------------------- Memory Access Queue  SIZE:%u---------------------------\n",m_accessq.size());
         for (std::list<mem_access_t>::iterator it=m_accessq.begin(); it != m_accessq.end(); ++it){
             printf("m_queue[%u]: ",i);
             (*it).print2();
-            printf("\n");
+            printf("\t[%u;%u;%u] Active Mask:%s/%s \n"
+                    ,m_warp_id
+                    ,m_sm_id
+                    ,pc
+                    ,(*it).get_warp_mask().to_string().c_str()
+                    ,m_warp_active_mask.to_string().c_str()
+            );
             i++;
+
         }
         printf("------------------------------------------------------------------------------------\n");
     }

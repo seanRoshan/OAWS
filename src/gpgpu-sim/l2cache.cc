@@ -367,7 +367,7 @@ void memory_sub_partition::cache_cycle( unsigned cycle )
 
     // prior L2 misses inserted into m_L2_dram_queue here
     if( !m_config->m_L2_config.disabled() ){
-        printf("DRSVR L2Cache");
+        //printf("DRSVR L2Cache");
         m_L2cache->cycle();
     }
 
