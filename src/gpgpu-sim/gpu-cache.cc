@@ -166,6 +166,9 @@ enum cache_request_status tag_array::probe( new_addr_type addr, unsigned &idx ) 
 
 
     unsigned set_index = m_config.set_index(addr);
+
+    //printf("DRSVR Probe Tag Array! Addr = %u ; DRSVR set_index = %u ;\n", addr, set_index);
+
     new_addr_type tag = m_config.tag(addr);
 
     //printf("DRSVR BLOCK_ADDR: %u ; set_index:%u ; tag: %u ; m_config.m_assoc:%u ;\n" ,addr ,set_index, tag, m_config.m_assoc);
@@ -222,8 +225,7 @@ enum cache_request_status tag_array::probe( new_addr_type addr, unsigned &idx ) 
     }
     if ( all_reserved ) {
         assert( m_config.m_alloc_policy == ON_MISS );
-        printf("DRSVR RESERVATION_FAIL: BLOCK_ADDR: %u ; tag: %u ; set_index:%u ; index:%u;\n", addr, tag, set_index);
-        //printf("DRSVR RESERVATION_FAIL: BLOCK_ADDR: %u ; set_index:%u ; tag: %u ; index:%u ;\n" ,addr ,set_index, tag, index);
+        //printf("DRSVR RESERVATION_FAIL: BLOCK_ADDR: %u ; tag: %u ; set_index:%u ; index:%u;\n", addr, tag, set_index);
         return RESERVATION_FAIL; // miss and not enough space in cache to allocate on miss
     }
 
@@ -237,7 +239,7 @@ enum cache_request_status tag_array::probe( new_addr_type addr, unsigned &idx ) 
     } // if an unreserved block exists, it is either invalid or replaceable
 
 
-    printf("DRSVR MISS:  BLOCK_ADDR: %u ; set_index:%u ; tag: %u ;\n" ,addr ,set_index, tag);
+    //printf("DRSVR MISS:  BLOCK_ADDR: %u ; set_index:%u ; tag: %u ;\n" ,addr ,set_index, tag);
 
     return MISS;
 }
@@ -1062,7 +1064,7 @@ data_cache::wr_miss_wa( new_addr_type addr,
                         unsigned time, std::list<cache_event> &events,
                         enum cache_request_status status )
 {
-    printf("DRSVR wr_miss_wa!\n");
+    //printf("DRSVR wr_miss_wa!\n");
     new_addr_type block_addr = m_config.block_addr(addr);
 
     // Write allocate, maximum 3 requests (write miss, read request, write back request)

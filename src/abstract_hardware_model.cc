@@ -477,9 +477,9 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
                if(data_size >= 4) {
                   data_size_coales = 4;
                   num_accesses = data_size/4;
-                   if ( (m_sm_id==5) && (m_warp_id==0)) {
+/*                   if ( (m_sm_id==5) && (m_warp_id==0)) {
                        printf("\nDRSVR data_size: %u ; num_accesses: %u ;\n", data_size, num_accesses);
-                   }
+                   }*/
 
                }
                // Otherwise keep the same data_size for sub-4B access to local memory
@@ -556,7 +556,7 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
 
 
 
-        smObj->update_dlc_table(m_warp_id, m_sm_id, pc,transactions_block_address_vector, is_write);
+        //smObj->update_dlc_table(m_warp_id, m_sm_id, pc,transactions_block_address_vector, is_write);
 
         if ( DRSVRdebug /*(m_sm_id==9)*/ /*&& (m_warp_id==0)*/ ) {
             smObj->print_dlc_table();

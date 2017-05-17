@@ -1967,13 +1967,57 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
         printf("Memory Request:> Warp ID/SM ID/PC:[%u,%u,%u]\t",mf->get_wid(), mf->get_sid(), mf->get_pc());
     }
 
+
     if (smObj){
         if (DRSVRdebug){
             mf->print2();
             inst.accessq_print();
         }
-        bool FCLstatus = smObj->global_FCL_obj->update_FCLUnit(mf->get_wid(),mf->get_sid(),mf->get_pc(),inst.accessq_count(),status);
-        smObj->updateFCL(FCLstatus);
+
+        address_type  blockAddress = m_config->m_L1D_config.block_addr(mf->get_addr());
+        unsigned set_index = m_config->m_L1D_config.set_index(blockAddress);
+
+        //bool FCLstatus = smObj->global_FCL_obj->update_FCLUnit(mf->get_wid(),mf->get_sid(),mf->get_pc(),inst.accessq_count(),status, blockAddress,(mf)->is_write());
+
+        smObj->global_FCL_obj->update_FCLUnit(mf->get_wid(),mf->get_sid(),mf->get_pc(),inst.accessq_count(),status, set_index,(mf)->is_write());
+
+        bool isLoad = (!(mf)->is_write());
+
+        if (smObj->global_FCL_obj->isDone() && smObj->global_FCL_obj->isDivergent() && isLoad ){
+
+            unsigned *DLCEntry = smObj->global_FCL_obj->getDLCEntry();
+            bool FCLstatus = smObj->global_FCL_obj->isFCL();
+
+
+            unsigned PC = DLCEntry[0];
+            unsigned INST = DLCEntry[1];
+            unsigned ACC = DLCEntry[2];
+            unsigned SET = DLCEntry[3];
+
+            smObj->update_dlc_table(mf->get_wid(), mf->get_sid(), PC ,INST ,ACC ,SET,isLoad);
+            smObj->updateOCW(FCLstatus, SET, ACC);
+
+
+            if (DRSVRdebug || (mf->get_sid()==9)){
+                printf("DRSVR FCL UNIT DLCLOCKED! [%u;%u;%u]\t",mf->get_wid() , mf->get_sid(), mf->get_pc());
+                if (FCLstatus){
+                    printf("PC:%u ; INST:%u ; ACC:%u ; SET:%u; FULLY CACHED!\n", PC ,INST ,ACC ,SET );
+                }
+                else {
+                    printf("PC:%u ; INST:%u ; ACC:%u ; SET:%u; NOT FULLY CACHED!\n", PC ,INST ,ACC ,SET );
+                }
+                smObj->print_dlc_table();
+            }
+
+
+        }
+
+
+        //printf("DRSVR process_cache_access! Addr = %u ; DRSVR set_index = %u ;\n", blockAddress, set_index,set_index);
+
+        //smObj->updateFCL(FCLstatus);
+
+
     }
 
     mem_stage_stall_type result = NO_RC_FAIL;

@@ -872,10 +872,17 @@ private:
 
     std::vector<unsigned> transaction_history_vector;
 
+
+    void update_dlc_entry(unsigned input_PC, unsigned input_inst, unsigned input_acc, unsigned input_set){
+        dlcTable.at(input_PC)->PC = input_PC;
+        dlcTable.at(input_PC)->instCounter+=input_inst;
+        dlcTable.at(input_PC)->accCounter+=input_acc;
+        dlcTable.at(input_PC)->setCounter+=input_set;
+    }
+
     void update_inst(unsigned input_PC) {
         dlcTable.at(input_PC)->instCounter++;
     }
-
 
     void update_acc (unsigned input_PC, unsigned transaction_count){
         dlcTable.at(input_PC)->accCounter+=transaction_count;
@@ -1031,13 +1038,27 @@ public:
         bool pcFound = findPC(input_pc);
 
         if (pcFound){
-
             update_inst(input_pc);
             update_acc(input_pc,transaction_count);
             update_set(input_pc,getSetsCount(transaction_vector));
         }
         else {
             dlcEntry *test = new dlcEntry(input_pc, transaction_count, getSetsCount(transaction_vector));
+            dlcTable[input_pc] = test;
+        }
+    }
+
+    void update_DLC_entry (unsigned input_pc, unsigned input_inst, unsigned input_acc, unsigned input_set ){
+
+        tempPC = input_pc;
+
+        bool pcFound = findPC(input_pc);
+
+        if (pcFound){
+            update_dlc_entry(input_pc, input_inst, input_acc, input_set);
+        }
+        else {
+            dlcEntry *test = new dlcEntry(input_pc, input_acc, input_set);
             dlcTable[input_pc] = test;
         }
     }
@@ -1097,7 +1118,6 @@ private:
 
     bool Div;
     bool FCL;
-    std::bitset<64> SetBitSet;
 
 
     unsigned Set;
@@ -1125,19 +1145,6 @@ private:
         else{
             Delta = 1;
         }
-    }
-
-
-    void OCW_updateSet(unsigned set_in){
-        SetBitSet.set(set_in);
-    }
-
-    void OCW_resetSet(){
-        SetBitSet.reset();
-    }
-
-    unsigned OCW_getSetTouched(){
-        return SetBitSet.count();
     }
 
     void OCW_Estimation_Logic (bool debugMode){
@@ -1175,7 +1182,7 @@ private:
                 printf("DRSVR OCW LOGIC END: FCL:%u ; CNT:%u ; Delta:%u; OCW:%u ;\n",FCL, CNT, Delta, OCW);
             }
         }
-        
+
     }
 
 
@@ -1198,6 +1205,11 @@ public:
 
     void isLoadFullyCached (bool isFullyCached){
         FCL = isFullyCached;
+    }
+
+    void updateOCW_SET_ACC (unsigned set_in, unsigned acc_in){
+        Acc = acc_in;
+        Set = set_in;
     }
 
     bool getFCL (){
@@ -1332,9 +1344,10 @@ class FCLUnit {
 
 private:
 
-    bool debugMode = false;
+    bool debugMode;
 
     bool startTracking;
+    bool dlcLock;
 
     unsigned PC;
     unsigned WARPID;
@@ -1344,10 +1357,26 @@ private:
     unsigned MISS_COUNT;
     unsigned HIT_COUNT;
 
+
+    std::bitset<64> SetBitSet;
+    unsigned set;
+    unsigned acc;
+    unsigned inst;
+
+    bool FCL;
+    bool FCLValid;
+
+
     unsigned Counter;
 
     void resetStat() {
+
+        debugMode = false;
+
         startTracking = false;
+        dlcLock = false;
+
+
         PC = (unsigned)-1;
         WARPID = (unsigned)-1;
         SMID = (unsigned)-1;
@@ -1357,6 +1386,13 @@ private:
         HIT_COUNT = 0;
 
         Counter = 0;
+
+        resetSet();
+        set = 0;
+        acc = 0;
+        inst = 0;
+        FCL = false;
+        FCLValid = false;
     }
 
     bool analiyzeStatus(unsigned status){
@@ -1392,7 +1428,9 @@ private:
         }
     }
 
-    void updateStatus(unsigned status_in, unsigned WARP_ID_IN, unsigned SM_ID_IN, unsigned PC_IN){
+    void updateStatus(unsigned status_in, unsigned WARP_ID_IN, unsigned SM_ID_IN, unsigned PC_IN, unsigned SET_IN){
+        debugMode = false ;
+
         this->checkInfo(WARP_ID_IN, SM_ID_IN, PC_IN);
         bool status = this->analiyzeStatus(status_in);
         Counter++;
@@ -1402,6 +1440,7 @@ private:
         else {
             HIT_COUNT++;
         }
+        updateSetBitset(SET_IN);
     }
 
     void checkInfo(unsigned WARP_ID_IN, unsigned SM_ID_IN, unsigned PC_IN){
@@ -1409,6 +1448,41 @@ private:
         assert(SM_ID_IN==SMID);
         assert(PC_IN==PC);
     }
+
+    void updateSetBitset(unsigned set_in){
+        SetBitSet.set(set_in);
+    }
+
+    void resetSet(){
+        SetBitSet.reset();
+    }
+
+    unsigned getSetTouched(){
+        return SetBitSet.count();
+    }
+
+    unsigned getAccCount(){
+        return LOAD_COUNT;
+    }
+
+    bool lockDLC(){
+
+        //Should be at the end of tracking
+        assert(Counter==LOAD_COUNT);
+
+        acc = getAccCount();
+        set = getSetTouched();
+        inst = 1;
+
+        if (debugMode){
+            printf("DRSVR FCL UNIT DLCLOCKED! [%u;%u;%u]\t", WARPID, SMID, PC);
+            printf("PC:%u ; INST:%u ; ACC:%u ; SET:%u;\n", PC ,inst ,acc ,set );
+        }
+
+        dlcLock = true;
+
+    }
+
 
 
 
@@ -1419,42 +1493,64 @@ public:
         this->resetStat();
     }
 
-    bool update_FCLUnit(unsigned WARP_ID_IN, unsigned SM_ID_IN, unsigned PC_IN, unsigned LOAD_COUNT_IN, unsigned status){
-        if (!startTracking){
-            // START TRACKING
-            this->resetStat();
-            if (debugMode){
-                printf("DRSVR START FCLUNIT TRACKING!\n");
+    void update_FCLUnit(unsigned WARP_ID_IN, unsigned SM_ID_IN, unsigned PC_IN, unsigned LOAD_COUNT_IN, unsigned status, unsigned set, bool is_write){
+
+        bool isLoad = !is_write;
+        bool isDivergent = (LOAD_COUNT_IN>1);
+
+        if ( isLoad ){
+            if (!startTracking && isDivergent){
+                // START TRACKING
+                this->resetStat();
+                if (debugMode){
+                    printf("DRSVR START FCLUNIT TRACKING!\n");
+                }
+                startTracking = true;
+                PC = PC_IN;
+                WARPID = WARP_ID_IN;
+                SMID = SM_ID_IN;
+                LOAD_COUNT = LOAD_COUNT_IN;
             }
-            startTracking = true;
-            PC = PC_IN;
-            WARPID = WARP_ID_IN;
-            SMID = SM_ID_IN;
-            LOAD_COUNT = LOAD_COUNT_IN;
-        }
+
+            if (startTracking){
+
+                updateStatus(status, WARP_ID_IN, SM_ID_IN, PC_IN, set);
+
+                if (debugMode){
+                    this->print();
+                }
+
+                if (Counter==LOAD_COUNT){
+                    if (debugMode){
+                        printf("DRSVR END FCLUNIT TRACKING!\n");
+                    }
+                    startTracking = false;
+                    lockDLC();
 
 
-        updateStatus(status, WARP_ID_IN, SM_ID_IN, PC_IN);
+                    if (MISS_COUNT==0){
+                        FCL= true;
+                    }
+                    else {
+                        FCL = false;
+                    }
 
-        if (debugMode){
-            this->print();
-        }
+                    FCLValid = true;
+
+                }
 
 
-        if (Counter==LOAD_COUNT){
-            if (debugMode){
-                printf("DRSVR END FCLUNIT TRACKING!\n");
+
             }
-            startTracking = false;
-        }
 
-        if (MISS_COUNT==0){
-            return true;
-        }
-        else {
-            return false;
-        }
 
+
+
+
+
+
+
+        }
     }
 
     void print(){
@@ -1470,9 +1566,31 @@ public:
     }
 
     bool isDone(){
-        assert(this->isDivergent());
-        return (!startTracking);
+        return (dlcLock);
     }
+
+    bool isFCL(){
+        assert(this->isDivergent());
+        assert(this->isDone());
+        assert(this->FCLValid);
+        return (FCL);
+    }
+
+    unsigned* getDLCEntry(){
+
+        assert(dlcLock);
+
+        unsigned *DLCEntry = new unsigned[4];
+
+        DLCEntry[0] = PC;
+        DLCEntry[1] = inst;
+        DLCEntry[2] = acc;
+        DLCEntry[3] = set;
+
+        return DLCEntry;
+
+    }
+
 };
 
 
@@ -1544,12 +1662,22 @@ public:
         global_stats_obj->print_histogram(histogramName);
     }
 
-    void update_dlc_table (unsigned input_warpid, unsigned input_sm_id, unsigned input_pc, std::vector<unsigned> transaction_vector, bool isWrite ){
+    void update_dlc_table_V2 (unsigned input_warpid, unsigned input_sm_id, unsigned input_pc, std::vector<unsigned> transaction_vector, bool isWrite ){
         if ( (transaction_vector.size()>1) && (!isWrite)) { // Divergent Load
 
             printf("Divergent Load: Warp ID/ SM ID/PC:[%u;%u;%u] Count:%u\n",input_warpid, input_sm_id, input_pc, transaction_vector.size());
             global_dlc_obj->update_DLC(input_pc, transaction_vector);
         }
+    }
+
+    void update_dlc_table (unsigned input_warpid, unsigned input_sm_id, unsigned input_pc, unsigned input_inst, unsigned input_acc, unsigned input_set, bool isLoad ){
+
+        assert(isLoad && (input_acc>1));
+
+        //printf("Divergent Load: Warp ID/ SM ID/PC:[%u;%u;%u]\t",input_warpid, input_sm_id, input_pc);
+        //printf("PC:%u ; INST:%u ; ACC:%u ; SET:%u;\n", input_pc ,input_inst ,input_acc ,input_set);
+        global_dlc_obj->update_DLC_entry(input_pc,input_inst ,input_acc ,input_set);
+
     }
 
     void print_dlc_table(){
@@ -1664,11 +1792,12 @@ public:
         }
     }
 
-    void updateFCL(bool status){
+    void updateOCW(bool status, unsigned set_in, unsigned acc_in){
         if (global_FCL_obj->isDivergent() && global_FCL_obj->isDone()){
-            printf("DRSVR UPDATE FCL: %u->%u\n", global_ocw_obj->getFCL(), status);
+            //printf("DRSVR UPDATE FCL: %u->%u\n", global_ocw_obj->getFCL(), status);
             global_ocw_obj->isLoadFullyCached(status);
             global_ocw_obj->isLoadDivergent(global_FCL_obj->isDivergent());
+            global_ocw_obj->updateOCW_SET_ACC(set_in, acc_in);
         }
     }
 
