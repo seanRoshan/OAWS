@@ -856,7 +856,7 @@ void simt_stack::print (FILE *fout) const
     }
 }
 
-void simt_stack::print2 () const
+void simt_stack::print2() const
 {
     for ( unsigned k=0; k < m_stack.size(); k++ ) {
         simt_stack_entry stack_entry = m_stack[k];

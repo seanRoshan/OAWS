@@ -1017,6 +1017,19 @@ private:
     }
 
 
+    //template <class T>
+    unsigned numDigits(unsigned number)
+    {
+        unsigned digits = 0;
+        if (number < 0) digits = 1; // remove this line if '-' counts as a digit
+        while (number) {
+            number /= 10;
+            digits++;
+        }
+        return digits;
+    }
+
+
 public:
 
     DLC(unsigned cache_set_number, unsigned cache_set_number_log2, unsigned word_size_in) {
@@ -1070,8 +1083,50 @@ public:
         printf("-------------------------------------------------------------------------------------------------------------\n");
 
         for (std::map<unsigned,dlcEntry*>::iterator it = dlcTable.begin(); it!=dlcTable.end(); ++it){
-            printf("|           %u           |           %u           |           %u           |           %u           |\n"
-                    ,it->first, it->second->instCounter, it->second->accCounter, it->second->setCounter);
+
+            // Print PC
+            unsigned numDigit = this->numDigits(it->second->PC);
+            unsigned totalSpace = 2 + 11 ;
+            unsigned whiteSpaces = totalSpace - numDigit;
+
+            printf("|           %u",it->second->PC);
+            for (unsigned i=0; i<whiteSpaces; i++){
+                printf(" ");
+            }
+
+
+            // Print INST
+            numDigit = this->numDigits(it->second->instCounter);
+            totalSpace = 5 + 11 ;
+            whiteSpaces = totalSpace - numDigit;
+
+            printf("|           %u",it->second->instCounter);
+            for (unsigned i=0; i<whiteSpaces; i++){
+                printf(" ");
+            }
+
+            numDigit = this->numDigits(it->second->accCounter);
+            totalSpace = 4 + 11 ;
+            whiteSpaces = totalSpace - numDigit;
+
+            printf("|           %u",it->second->accCounter);
+            for (unsigned i=0; i<whiteSpaces; i++){
+                printf(" ");
+            }
+
+            numDigit = this->numDigits(it->second->setCounter);
+            totalSpace = 5 + 11 ;
+            whiteSpaces = totalSpace - numDigit;
+
+            printf("|           %u",it->second->setCounter);
+            for (unsigned i=0; i<whiteSpaces; i++){
+                printf(" ");
+            }
+
+            printf("|\n");
+
+            /*printf("|           %u           |           %u           |           %u           |           %u           |\n"
+            ,it->first, it->second->instCounter, it->second->accCounter, it->second->setCounter);*/
         }
 
         printf("-------------------------------------------------------------------------------------------------------------\n");
@@ -1133,12 +1188,16 @@ private:
     const unsigned  WMAX = 48 ;
 
 
-    void calculateDelta(){
+    void calculateDelta(bool debugMode){
 
         double tempSet = static_cast<double>(Set);
         double tempAcc = static_cast<double>(Acc);
 
         if (Acc>Set*1.5){
+            if (debugMode){
+                printf("Set:%d ; Acc:%d Acc/Set:%f\n", Set, Acc, tempAcc/tempSet);
+                printf("DRSVR DELTA CHANGE!\n");
+            }
             Delta = CNT/2;
             // Associativity Sensitive
         }
@@ -1151,7 +1210,7 @@ private:
 
 
         if (Div){
-            calculateDelta();
+            calculateDelta(debugMode);
 
             // Should be a divergent Load
 
@@ -1191,6 +1250,7 @@ public:
     OCW_LOGIC(){
         Div = false;
         FCL = false;
+        CNT = 128;
         Acc = 0;
         OCW = 2;
     }
@@ -1225,8 +1285,8 @@ public:
         return Set;
     }*/
 
-    unsigned getOCW(){
-        bool debug = true;
+    unsigned getOCW(bool debugMode){
+        bool debug = debugMode;
         OCW_Estimation_Logic(debug);
         return OCW;
     }
@@ -1799,6 +1859,10 @@ public:
             global_ocw_obj->isLoadDivergent(global_FCL_obj->isDivergent());
             global_ocw_obj->updateOCW_SET_ACC(set_in, acc_in);
         }
+    }
+
+    unsigned getOCW(bool debugMode){
+        return (global_ocw_obj->getOCW(debugMode));
     }
 
 

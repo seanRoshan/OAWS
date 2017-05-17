@@ -757,6 +757,22 @@ protected:
     bool miss_queue_full(unsigned num_miss){
     	  return ( (m_miss_queue.size()+num_miss) >= m_config.m_miss_queue_size );
     }
+
+    /// PRINT MISS QUEUE
+    void miss_queue_print(){
+        printf("-------------------------- MISS Queue  SIZE:%u---------------------------\n",m_miss_queue.size());
+        unsigned i = 0;
+        for (std::list<mem_fetch*>::iterator it=m_miss_queue.begin(); it!=m_miss_queue.end(); it++){
+            printf("MISS QUEUE[%u]: ",i);
+            (*it)->print2();
+            i++;
+            printf("\n");
+        }
+        printf("---------------------------------------------------------------------------\n");
+
+    }
+
+
     /// Read miss handler without writeback
     void send_read_request(new_addr_type addr, new_addr_type block_addr, unsigned cache_index, mem_fetch *mf,
     		unsigned time, bool &do_miss, std::list<cache_event> &events, bool read_only, bool wa);

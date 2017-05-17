@@ -502,6 +502,14 @@ void mshr_table::print() const{
 }
 
 void mshr_table::print2() const{
+
+    if (smObjLoaded){
+        //printf("\n----------------------------------------------------------------------\n");
+        printf("\n");
+        smObj->print_dlc_table();
+    }
+
+
     printf("----------------------------------------------------------------------\n");
     printf("MSHR contents Size:%u\n", m_data.size());
     printf("----------------------------------------------------------------------");
@@ -516,11 +524,8 @@ void mshr_table::print2() const{
             printf(" no memory requests???\n");
         }
     }
-    if (smObjLoaded){
-        printf("\n----------------------------------------------------------------------\n");
-        smObj->print_dlc_table();
-    }
-    printf("----------------------------------------------------------------------\n");
+
+    //printf("----------------------------------------------------------------------\n");
 }
 
 void mshr_table::update_oaws_status(unsigned available_in, unsigned missOnFlight_in){
@@ -541,7 +546,7 @@ void mshr_table::update_oaws_memoryOcclusion(bool print, unsigned in_warpid, new
         alreadyOccluded = true;
         if (print) {
             printf(" %llu ;\n", memoryOcclusion);
-            //this->print2();
+            this->print2();
         }
     }
 
@@ -959,8 +964,9 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
         if (!m_mshrs.isAlreadyOccluded(mf->get_wid(), addr, block_addr)){
             printf("DRSVR MSHR OCCLUSION:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ; Occlusion:", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str() );
             m_mshrs.update_oaws_memoryOcclusion(true, mf->get_wid(), addr, block_addr);
-            mf->get_inst().print_insn2();
+            //mf->get_inst().print_insn2();
             printf("\n");
+            this->miss_queue_print();
         }
         else {
             unsigned replayCount = m_mshrs.occlusionReplayed();

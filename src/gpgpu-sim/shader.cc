@@ -1997,9 +1997,12 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
             smObj->update_dlc_table(mf->get_wid(), mf->get_sid(), PC ,INST ,ACC ,SET,isLoad);
             smObj->updateOCW(FCLstatus, SET, ACC);
 
+            bool debugMode = DRSVRdebug || (mf->get_sid()==9) ;
 
-            if (DRSVRdebug || (mf->get_sid()==9)){
-                printf("DRSVR FCL UNIT DLCLOCKED! [%u;%u;%u]\t",mf->get_wid() , mf->get_sid(), mf->get_pc());
+            unsigned OCW = smObj->getOCW(debugMode);
+
+            if (debugMode){
+                printf("DRSVR FCL UNIT DLCLOCKED! [%u;%u;%u] OCW:%u\t",mf->get_wid() , mf->get_sid(), mf->get_pc(), OCW);
                 if (FCLstatus){
                     printf("PC:%u ; INST:%u ; ACC:%u ; SET:%u; FULLY CACHED!\n", PC ,INST ,ACC ,SET );
                 }
