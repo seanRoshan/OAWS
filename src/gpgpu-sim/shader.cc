@@ -1491,7 +1491,7 @@ void scheduler_unit::cycle()
 
                             }
 
-                            if (!(*iter)->ocw_approved() && pI->op==LOAD_OP){
+                            /*if (!(*iter)->ocw_approved() && pI->op==LOAD_OP){
                                 if (DRSVRdebug) {
                                     printf("DRSVR OAWS WARP BLOCKED BY OCW: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Miss-On-Flight:%u ; Available MSHR:%u;\n"
                                             ,(*iter)->get_warp_id()
@@ -1505,7 +1505,7 @@ void scheduler_unit::cycle()
                                 checked++;
                                 continue;
 
-                            }
+                            }*/
 
 
 
