@@ -769,6 +769,12 @@ void shader_core_ctx::issue(){
     //really is issue;
     for (unsigned i = 0; i < schedulers.size(); i++) {
         schedulers[i]->load_smObj(drsvrObj);
+        if (i==0){
+            schedulers[0]->loadGlobal_GTO_PRIO(0);
+        }
+        else {
+            schedulers[1]->loadGlobal_GTO_PRIO(schedulers[0]->getGlocal_GTO_PRIO());
+        }
         //schedulers[i]->get_smObj()->print_dlc_table();
         //if (m_sid == 5){  printf("DRSVR issue scheduler:> %d \n",i); }
         schedulers[i]->cycle();
@@ -839,9 +845,17 @@ void scheduler_unit::set_OAWS_flags(std::vector< T > &input_list){
         }
 
 
+
+
         unsigned my_warp_id = input_list.at(i)->get_warp_id();
         unsigned my_dynamic_warp_id = input_list.at(i)->get_dynamic_warp_id();
         unsigned activeThreadsCount = m_simt_stack[my_warp_id]->get_active_mask().count();
+        unsigned PC = input_list.at(i)->get_pc();
+        unsigned localGTOPriority = input_list.at(i)->get_gprio();
+        bool locality = input_list.at(i)->ocw_approved();
+
+        unsigned gtoPriority = input_list.at(i)->get_gprio();
+        bool     OCW_Approved = input_list.at(i)->ocw_approved();
 
         /*printf("OAWS FLAG FUNCTION: warp_id:%u ; dynamic_warp_id:%u ; activeThreads:%u; PC: "
                 , my_warp_id
@@ -850,8 +864,19 @@ void scheduler_unit::set_OAWS_flags(std::vector< T > &input_list){
 
         //if (smObj->oawsApproved(input_list.at(i)->get_pc(), input_list.at(i)->getActiveThreadCount())){
 
+       /* printf("warp_id:%u ; dynamic_warp_id:%u ; activeThreads:%u; PC: %u ; Gprio:%u ; Locality:%u ; \n"
+                , my_warp_id
+                , my_dynamic_warp_id
+                , activeThreadsCount
+                , PC
+                , gtoPriority
+                , OCW_Approved
+        );*/
 
-        if (smObj->oawsApproved(input_list.at(i)->get_pc(), activeThreadsCount)){
+
+
+
+        if (smObj->oawsApproved(input_list.at(i)->get_pc(), activeThreadsCount, gtoPriority, OCW_Approved)){
             if (!input_list.at(i)->oaws_approved()  && DRSVRdebug ){
                printf("OAWS Approved after disapproval! warp_id:%u ; sm_id:%u ; pc:%u \n"
                        ,input_list.at(i)->get_warp_id()
@@ -866,6 +891,91 @@ void scheduler_unit::set_OAWS_flags(std::vector< T > &input_list){
 
     }
 }
+
+template < class T >
+void scheduler_unit::warpThrottling(std::vector< T > &input_list, unsigned OCW_Value){
+
+    bool debugMode =  DRSVRdebug;
+
+    //debugMode = debugMode || (smObj->get_sm_id()==9);
+
+    unsigned adjusted_OCW_value;
+
+    if ( (OCW_Value%2)==0){
+        adjusted_OCW_value = OCW_Value/2;
+    }
+    else {
+        adjusted_OCW_value = (OCW_Value+1)/2;
+    }
+
+    assert(adjusted_OCW_value>=1);
+
+
+    if (debugMode){
+        printf("####################################################### OCW Throttling Function OCW:%u #######################################################\n",OCW_Value);
+    }
+
+    int index = 0;
+
+    for (unsigned i=0; i<input_list.size(); i++){
+
+        shd_warp_t *test;
+        //test->get_sm_id();
+        //test->get_pc();
+        //test->get_warp_id();
+        //this->m_simt_stack[]
+
+        if ( input_list.at(i)->get_dynamic_warp_id() == 4294967295) {
+            continue;
+        }
+
+
+        if ( (input_list.at(i)->ibuffer_empty()) || (adjusted_OCW_value==0) ) {
+            input_list.at(i)->resetOCWLocalityStatus();
+            input_list.at(i)->set_gprio( (unsigned)-1);
+        }
+        else {
+            input_list.at(i)->setOCWLocalityStatus();
+            input_list.at(i)->set_gprio(global_gtoprio);
+            adjusted_OCW_value--;
+            global_gtoprio++;
+        }
+
+
+        unsigned my_warp_id = input_list.at(i)->get_warp_id();
+        unsigned my_dynamic_warp_id = input_list.at(i)->get_dynamic_warp_id();
+        unsigned activeThreadsCount = m_simt_stack[my_warp_id]->get_active_mask().count();
+        unsigned PC = input_list.at(i)->get_pc();
+        unsigned localGTOPriority = input_list.at(i)->get_gprio();
+        bool locality = input_list.at(i)->ocw_approved();
+
+
+
+        if (debugMode){
+            printf("WARP[%u]: warp_id:%u ; dynamic_warp_id:%u ; activeThreads:%u; PC: %u ; Gprio:%u ; Locality:%u ; "
+                    , index
+                    , my_warp_id
+                    , my_dynamic_warp_id
+                    , activeThreadsCount
+                    , PC
+                    , localGTOPriority
+                    , locality
+            );
+            input_list.at(i)->print2_ibuffer();
+        }
+        index++;
+
+    }
+
+    if (debugMode){
+        printf("##############################################################################################################################################\n");
+    }
+
+}
+
+
+
+
 
 /**
  * A general function to order things in an priority-based way.
@@ -892,10 +1002,27 @@ void scheduler_unit::order_by_priority( bool isOAWS,
     result_list.clear();
 
     typename std::vector< T > temp = input_list;
+    typename std::vector< T > preList;
+
+
+
 
     if ( ORDERING_GREEDY_THEN_PRIORITY_FUNC == ordering ) {
+
         T greedy_value = *last_issued_from_input;
-        result_list.push_back( greedy_value );
+        //result_list.push_back(greedy_value);
+
+
+
+        preList.push_back(greedy_value);
+        std::sort( temp.begin(), temp.end(), priority_func );
+        typename std::vector< T >::iterator iter = temp.begin();
+        for ( unsigned count = 0; count < num_warps_to_add; ++count, ++iter ) {
+            if (  (*iter != greedy_value)) {
+                preList.push_back( *iter );
+            }
+        }
+
 
 
         unsigned j = 0;
@@ -932,7 +1059,11 @@ void scheduler_unit::order_by_priority( bool isOAWS,
 
         if (isOAWS == true) {
 
-            this->set_OAWS_flags(temp);
+            unsigned OCW = smObj->get_OCW_value();
+
+            this->warpThrottling(preList, OCW);
+
+            this->set_OAWS_flags(preList);
 
             /*printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER FLAGS: \n");
             for (unsigned i=0; i<temp.size(); i++) {
@@ -957,6 +1088,13 @@ void scheduler_unit::order_by_priority( bool isOAWS,
             o=0;
 */
         }
+
+        greedy_value = preList.at(0);
+        preList.pop_back();
+
+        result_list.push_back(greedy_value);
+
+        temp = preList;
 
 
         std::sort( temp.begin(), temp.end(), priority_func );
@@ -1000,14 +1138,14 @@ void scheduler_unit::order_by_priority( bool isOAWS,
         }*/
 
 
-        typename std::vector< T >::iterator iter = temp.begin();
+        iter = temp.begin();
         for ( unsigned count = 0; count < num_warps_to_add; ++count, ++iter ) {
             if (  (*iter != greedy_value) /*|| greadyRemoved */ ) {
                 result_list.push_back( *iter );
             }
-            /*else {
+            else {
                 (*iter)->setOAWSApproved();
-            }*/
+            }
         }
 
 
@@ -1039,10 +1177,12 @@ void scheduler_unit::order_by_priority( bool isOAWS,
                 //test->waiting()
                 //test->oaws_approved();
 
-                printf("%u-%u - PC:%u - SM:%u [O:%u-%u][E:%u][W:%u]; inst :", result_list.at(i)->get_warp_id(),
-                       result_list.at(i)->get_dynamic_warp_id(), result_list.at(i)->get_pc(),
-                       result_list.at(i)->get_sm_id(),
-                       result_list.at(i)->oaws_approved(), m_simt_stack[result_list.at(i)->get_warp_id()]->get_active_mask().count(), result_list.at(i)->done_exit(), result_list.at(i)->waiting());
+                printf("%u-%u - PC:%u - SM:%u [O:%u-%u][T:%u-%u][E:%u][W:%u]; inst :"
+                        , result_list.at(i)->get_warp_id(), result_list.at(i)->get_dynamic_warp_id()
+                        , result_list.at(i)->get_pc(), result_list.at(i)->get_sm_id()
+                        , result_list.at(i)->oaws_approved(), m_simt_stack[result_list.at(i)->get_warp_id()]->get_active_mask().count()
+                        , result_list.at(i)->ocw_approved(), result_list.at(i)->get_gprio()
+                        , result_list.at(i)->done_exit(), result_list.at(i)->waiting());
                 //result_list.at(i)->ibuffer_next_inst()->ibuffer_next_inst()->print_insn2();
                 result_list.at(i)->print2_ibuffer();
                 if (result_list.at(i)->oaws_approved()) {
@@ -1113,8 +1253,6 @@ void scheduler_unit::cycle()
 
     //printf("DRSVR Warps Order!\n");
     order_warps();
-
-
 
     //printf("DRSVR :\n");
     //printf("m_next_cycle_prioritized_warps:> %u \n", m_next_cycle_prioritized_warps.size());
@@ -1339,7 +1477,23 @@ void scheduler_unit::cycle()
 
                             if (!(*iter)->oaws_approved() && pI->op==LOAD_OP){
                                 if (DRSVRdebug) {
-                                    printf("DRSVR OAWS WARP BLOCKED: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Miss-On-Flight:%u ; Available MSHR:%u;\n"
+                                    printf("DRSVR OAWS WARP BLOCKED BY OAWS: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Miss-On-Flight:%u ; Available MSHR:%u;\n"
+                                            ,(*iter)->get_warp_id()
+                                            , (*iter)->get_sm_id()
+                                            , (*iter)->get_pc()
+                                            , (*pI).op
+                                            , (smObj)->get_missOnFlight()
+                                            , (smObj)->get_availableMSHR());
+                                    smObj->print_mshr_info();
+                                }
+                                checked++;
+                                continue;
+
+                            }
+
+                            if (!(*iter)->ocw_approved() && pI->op==LOAD_OP){
+                                if (DRSVRdebug) {
+                                    printf("DRSVR OAWS WARP BLOCKED BY OCW: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Miss-On-Flight:%u ; Available MSHR:%u;\n"
                                             ,(*iter)->get_warp_id()
                                             , (*iter)->get_sm_id()
                                             , (*iter)->get_pc()
@@ -1999,17 +2153,17 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
 
             bool debugMode = DRSVRdebug || (mf->get_sid()==9) ;
 
-            unsigned OCW = smObj->getOCW(debugMode);
+            smObj->set_OCW_value(smObj->getOCW(debugMode));
 
             if (debugMode){
-                printf("DRSVR FCL UNIT DLCLOCKED! [%u;%u;%u] OCW:%u\t",mf->get_wid() , mf->get_sid(), mf->get_pc(), OCW);
+                printf("DRSVR FCL UNIT DLCLOCKED! [%u;%u;%u] OCW:%u\t",mf->get_wid() , mf->get_sid(), mf->get_pc(), smObj->get_OCW_value());
                 if (FCLstatus){
                     printf("PC:%u ; INST:%u ; ACC:%u ; SET:%u; FULLY CACHED!\n", PC ,INST ,ACC ,SET );
                 }
                 else {
                     printf("PC:%u ; INST:%u ; ACC:%u ; SET:%u; NOT FULLY CACHED!\n", PC ,INST ,ACC ,SET );
                 }
-                smObj->print_dlc_table();
+                //smObj->print_dlc_table();
             }
 
 

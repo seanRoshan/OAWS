@@ -109,6 +109,8 @@ public:
         m_next=0;
         m_inst_at_barrier=NULL;
         m_oaws_approved=false;
+        m_ocw_localityStatus=false;
+        m_warp_gprio = 0;
     }
     void init( address_type start_pc,
                unsigned cta_id,
@@ -129,6 +131,8 @@ public:
         m_done_exit=false;
         m_sm_id = sm_id;
         m_oaws_approved=true;
+        m_ocw_localityStatus=true;
+        m_warp_gprio=0;
     }
 
     bool functional_done() const;
@@ -140,6 +144,7 @@ public:
 
 
     bool oaws_approved() const {return m_oaws_approved;}
+    bool ocw_approved() const {return m_ocw_localityStatus;}
 
     void print( FILE *fout ) const;
     void print_ibuffer( FILE *fout ) const;
@@ -237,8 +242,16 @@ public:
     unsigned get_dynamic_warp_id() const { return m_dynamic_warp_id; }
     unsigned get_warp_id() const { return m_warp_id; }
 
+    unsigned get_gprio() const { return m_warp_gprio;}
+    void set_gprio(unsigned input_gto_priority) {
+        m_warp_gprio = input_gto_priority;
+    }
+
     void setOAWSApproved() { m_oaws_approved = true;}
     void resetOAWSApproved() { m_oaws_approved = false;}
+
+    void setOCWLocalityStatus() { m_ocw_localityStatus = true;}
+    void resetOCWLocalityStatus() { m_ocw_localityStatus = false;}
 
     unsigned getActiveThreadCount()
     {
@@ -259,6 +272,7 @@ private:
     unsigned m_warp_size;
     unsigned m_dynamic_warp_id;
     unsigned m_sm_id;
+    unsigned m_warp_gprio;
 
     address_type m_next_pc;
     unsigned n_completed;          // number of threads in warp completed
@@ -282,6 +296,7 @@ private:
     bool m_done_exit; // true once thread exit has been registered for threads in this warp
 
     bool m_oaws_approved; // true when we have enough mshr entries
+    bool m_ocw_localityStatus; // true when warp is locality warp
 
     unsigned long long m_last_fetch;
 
@@ -333,6 +348,8 @@ private:
     DRSVR *smObj;
     bool smObjLoaded;
 
+    unsigned global_gtoprio;
+
 public:
 
     void load_smObj (DRSVR *drsvrObj){
@@ -362,6 +379,7 @@ public:
         m_scoreboard(scoreboard), m_simt_stack(simt), /*m_pipeline_reg(pipe_regs),*/ m_warp(warp),
         m_sp_out(sp_out),m_sfu_out(sfu_out),m_mem_out(mem_out), m_id(id){
         smObjLoaded = false;
+        unsigned global_gtoprio = 0;
     }
     virtual ~scheduler_unit(){}
     virtual void add_supervised_warp_id(int i) {
@@ -369,6 +387,15 @@ public:
     }
     virtual void done_adding_supervised_warps() {
         m_last_supervised_issued = m_supervised_warps.end();
+    }
+
+
+    void loadGlobal_GTO_PRIO(unsigned input_gtoprio){
+        global_gtoprio = input_gtoprio;
+    }
+
+    unsigned getGlocal_GTO_PRIO(){
+        return global_gtoprio;
     }
 
 
@@ -406,6 +433,9 @@ public:
                             bool (*priority_func)(U lhs, U rhs) );
     template < typename U >
     void set_OAWS_flags(std::vector< U >& input_list);
+
+    template < typename U >
+    void warpThrottling(std::vector< U > &input_list, unsigned OCW_Value);
 
 
     static bool sort_warps_by_oldest_dynamic_id(shd_warp_t* lhs, shd_warp_t* rhs);

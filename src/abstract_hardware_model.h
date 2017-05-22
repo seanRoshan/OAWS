@@ -1184,7 +1184,7 @@ private:
     unsigned CNT;
     unsigned Delta;
 
-    const unsigned  CMAX = 255;
+    const unsigned  CMAX = 127;
     const unsigned  WMAX = 48 ;
 
 
@@ -1675,6 +1675,9 @@ private:
         unsigned availableMSHR;
         bool  mshrStatsInitialized = false;
 
+        unsigned OCW_VALUE;
+        //bool OCW_VALID;
+
 
 
 
@@ -1701,6 +1704,17 @@ public:
 
         global_FCL_obj = new FCLUnit();
 
+        OCW_VALUE = 2;
+        //OCW_VALID = false;
+
+    }
+
+    void set_OCW_value(unsigned OCW_IN){
+        OCW_VALUE = OCW_IN;
+    }
+
+    unsigned get_OCW_value(){
+        return (OCW_VALUE);
     }
 
     unsigned get_sm_id (){
@@ -1781,13 +1795,13 @@ public:
                 , availableMSHR, missOnFlight);
     }
 
-    bool missPred (unsigned input_PC, unsigned active_threads){
+    bool missPred(unsigned input_PC, unsigned active_threads, unsigned gto_prio){
 
         bool DRSVRdebug = false;
 
         unsigned remainingMSHR = availableMSHR - missOnFlight;
 
-        unsigned SMR_Fraction = 1;
+        unsigned SMR_Fraction = 2;
         unsigned fixedActive_threads = 1;
         unsigned requiredMSHR = 0;
 
@@ -1797,15 +1811,16 @@ public:
             while (fixedActive_threads%SMR_Fraction!=0){
                 fixedActive_threads++;
             }
-            requiredMSHR = fixedActive_threads/SMR_Fraction;
+            //requiredMSHR = (fixedActive_threads/SMR_Fraction);
+            requiredMSHR = (fixedActive_threads/SMR_Fraction) + gto_prio;
         }
         else {
-            requiredMSHR = 1;
+            //requiredMSHR = 1;
+            requiredMSHR = 1 + gto_prio;
         }
 
         if ( (remainingMSHR<requiredMSHR) ){
-
-            if ( /*(this->get_sm_id()==9) &&*/ DRSVRdebug ){
+            if ( DRSVRdebug ){
                 printf("DRSVR MSHR NOT APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
                         ,remainingMSHR
                         ,availableMSHR
@@ -1813,11 +1828,10 @@ public:
                         ,active_threads
                         ,requiredMSHR);
             }
-
             return false;
         }
         else {
-            if (/* (this->get_sm_id()==9) &&*/ DRSVRdebug){
+            if ( DRSVRdebug ){
                 printf("DRSVR MSHR APPROVED! remainingMSHR:%u ; availableMSHR:%u; missOnFlight:%u; activeThreads: %u; requiredMSHR: %u;\n"
                         ,remainingMSHR
                         ,availableMSHR
@@ -1830,9 +1844,11 @@ public:
 
     }
 
-    bool oawsApproved(unsigned input_PC, unsigned active_threads){
-
+    bool oawsApproved(unsigned input_PC, unsigned active_threads, unsigned gto_prio, bool OCW_Approved){
         if (global_dlc_obj->isDivergent(input_PC)){
+            if (!OCW_Approved){
+                return false;
+            }
             unsigned Inst = global_dlc_obj->get_InstOccurance(input_PC);
             unsigned Acc = global_dlc_obj->get_TransactionCounts(input_PC);
             unsigned Set = global_dlc_obj->get_SetTouched(input_PC);
@@ -1843,7 +1859,7 @@ public:
                     ,Acc
                     ,Set
             );*/
-            return (missPred(input_PC, active_threads));
+            return (missPred(input_PC, active_threads, gto_prio));
 
         }
         else {
@@ -1985,7 +2001,6 @@ public:
         m_config=NULL;
         DRSVR_COALESCE = 0;
         //drsvrObj = tempObj;
-
     }
     warp_inst_t( const core_config *config)
     { 
