@@ -1255,7 +1255,7 @@ public:
         OCW = 2;
     }
 
-    void isLoadDivergent (bool isDivergent){
+    void isLoadDivergent(bool isDivergent){
         Div = isDivergent;
     }
 
@@ -1263,11 +1263,11 @@ public:
         return Div;
     }
 
-    void isLoadFullyCached (bool isFullyCached){
+    void isLoadFullyCached(bool isFullyCached){
         FCL = isFullyCached;
     }
 
-    void updateOCW_SET_ACC (unsigned set_in, unsigned acc_in){
+    void updateOCW_SET_ACC(unsigned set_in, unsigned acc_in){
         Acc = acc_in;
         Set = set_in;
     }
@@ -1404,7 +1404,7 @@ class FCLUnit {
 
 private:
 
-    bool debugMode;
+    bool debugMode = true;
 
     bool startTracking;
     bool dlcLock;
@@ -1431,7 +1431,7 @@ private:
 
     void resetStat() {
 
-        debugMode = false;
+        //debugMode = false;
 
         startTracking = false;
         dlcLock = false;
@@ -1489,7 +1489,7 @@ private:
     }
 
     void updateStatus(unsigned status_in, unsigned WARP_ID_IN, unsigned SM_ID_IN, unsigned PC_IN, unsigned SET_IN){
-        debugMode = false ;
+        //debugMode = false ;
 
         this->checkInfo(WARP_ID_IN, SM_ID_IN, PC_IN);
         bool status = this->analiyzeStatus(status_in);

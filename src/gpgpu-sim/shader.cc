@@ -929,8 +929,10 @@ void scheduler_unit::warpThrottling(std::vector< T > &input_list, unsigned OCW_V
             continue;
         }
 
+        //test->waiting();
+        //test->done_exit();
 
-        if ( (input_list.at(i)->ibuffer_empty()) || (adjusted_OCW_value==0) ) {
+        if ( (input_list.at(i)->ibuffer_empty()) || (input_list.at(i)->waiting()) || (input_list.at(i)->done_exit()) || (adjusted_OCW_value==0) ) {
             input_list.at(i)->resetOCWLocalityStatus();
             input_list.at(i)->set_gprio( (unsigned)-1);
         }
@@ -1475,15 +1477,22 @@ void scheduler_unit::cycle()
 
                         if ( (pI->op == LOAD_OP) || (pI->op == STORE_OP) || (pI->op == MEMORY_BARRIER_OP) ) {
 
+
                             if (!(*iter)->oaws_approved() && pI->op==LOAD_OP){
-                                if (DRSVRdebug) {
-                                    printf("DRSVR OAWS WARP BLOCKED BY OAWS: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Miss-On-Flight:%u ; Available MSHR:%u;\n"
+
+                                assert((*pI).space.get_type()==10);
+
+                                if (true /*DRSVRdebug*/) {
+                                    printf("DRSVR OAWS WARP BLOCKED BY OAWS: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Miss-On-Flight:%u ; Available MSHR:%u; OCW:%u ; Space:%u\n"
                                             ,(*iter)->get_warp_id()
                                             , (*iter)->get_sm_id()
                                             , (*iter)->get_pc()
                                             , (*pI).op
                                             , (smObj)->get_missOnFlight()
-                                            , (smObj)->get_availableMSHR());
+                                            , (smObj)->get_availableMSHR()
+                                            , (smObj)->get_OCW_value()
+                                            , (*pI).space.get_type()
+                                    );
                                     smObj->print_mshr_info();
                                 }
                                 checked++;
@@ -1520,9 +1529,10 @@ void scheduler_unit::cycle()
                                 //printf("SHAH TEST Before memory issue!!\n");
                                 //(*m_mem_out).print();
                                 m_shader->issue_warp(*m_mem_out, pI, active_mask, warp_id);
+
                                 //printf("SHAH TEST After memory issue!!\n");
 
-                                if (DRSVRdebug) {
+                                if (true/*DRSVRdebug*/) {
                                     printf("DRSVR OAWS WARP ISSUED: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ;\n",(*iter)->get_warp_id(), (*iter)->get_sm_id(), (*iter)->get_pc(), (*pI).op );
                                 }
 
@@ -2151,7 +2161,10 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
             smObj->update_dlc_table(mf->get_wid(), mf->get_sid(), PC ,INST ,ACC ,SET,isLoad);
             smObj->updateOCW(FCLstatus, SET, ACC);
 
-            bool debugMode = DRSVRdebug || (mf->get_sid()==9) ;
+            //bool debugMode = DRSVRdebug ;
+            //debugMode = debugMode || (mf->get_sid()==9) ;
+
+            bool debugMode = true;
 
             smObj->set_OCW_value(smObj->getOCW(debugMode));
 

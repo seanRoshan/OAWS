@@ -200,6 +200,7 @@ void warp_inst_t::generate_mem_accesses()
 
     bool is_write = is_store();
 
+
     mem_access_type access_type;
     switch (space.get_type()) {
     case const_space:
