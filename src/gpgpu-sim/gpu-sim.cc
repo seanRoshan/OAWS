@@ -550,8 +550,15 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
     m_memory_config = &m_config.m_memory_config;
 
 
+///DRSVR ADDED BEGIN
+
+
     // DRSVR initialize smObj Vector
     this->init_smObjVector();
+
+    dlcFile = fopen("dlcFile.drsvr","w");
+
+///DRSVR ADDED END
 
     set_ptx_warp_size(m_shader_config);
     ptx_file_line_stats_create_exposed_latency_tracker(m_config.num_shader());
@@ -744,12 +751,34 @@ void gpgpu_sim::drsvr_printDLCStats() {
 
     unsigned numberOfShaders= m_config.num_shader();
 
+
     for (unsigned i=0; i<numberOfShaders; i++){
-        smObjVector.at(i)->print_dlc_table();
+        smObjVector.at(i)->print_dlc_table_aggregated();
     }
 
     printf("----------------------------END OF DLC DETAILS--------------------------------\n" );
 
+}
+
+void gpgpu_sim::drsvr_printDLCStats_tofile() {
+
+    unsigned numberOfShaders= m_config.num_shader();
+
+    fprintf(dlcFile,"############################################### DLC DETAILS KERNEL ###############################################\n");
+    fprintf(dlcFile, "%s",this->executed_kernel_info_string().c_str());
+
+    for (unsigned i=0; i<numberOfShaders; i++){
+        smObjVector.at(i)->printout_dlc_tofile_lastKernel(dlcFile);
+        //smObjVector.at(i)->printout_dlc_tofile_multiKernel(dlcFile);
+        //smObjVector.at(i)->printout_dlc_tofile_singleKernel(dlcFile,this->m_last_issued_kernel);
+    }
+
+    fprintf(dlcFile,"############################################### END OF DLC DETAILS ###############################################\n" );
+
+
+    //fclose(dlcFile);
+
+    //smObjVector.at(i).
 }
 
 
@@ -773,6 +802,7 @@ void gpgpu_sim::print_stats()
     }
 
     drsvr_printDLCStats();
+
 }
 
 void gpgpu_sim::deadlock_check()
@@ -924,7 +954,9 @@ void gpgpu_sim::gpu_print_stat()
    FILE *statfout = stdout; 
 
    std::string kernel_info_str = executed_kernel_info_string(); 
-   fprintf(statfout, "%s", kernel_info_str.c_str()); 
+   fprintf(statfout, "%s", kernel_info_str.c_str());
+
+   drsvr_printDLCStats_tofile();
 
    printf("gpu_sim_cycle = %lld\n", gpu_sim_cycle);
    printf("gpu_sim_insn = %lld\n", gpu_sim_insn);

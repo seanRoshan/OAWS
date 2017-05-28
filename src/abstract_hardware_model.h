@@ -71,7 +71,6 @@ enum FuncCache
 #include <csignal>
 #include <bitset>
 
-
 typedef unsigned long long new_addr_type;
 typedef unsigned address_type;
 typedef unsigned addr_t;
@@ -853,6 +852,15 @@ struct dlcEntry {
         accCounter = accCount;
         setCounter = setCount;
     }
+
+
+    dlcEntry(unsigned input_PC, unsigned instCount, unsigned accCount, unsigned setCount){
+        PC = input_PC;
+        instCounter = instCount;
+        accCounter = accCount;
+        setCounter = setCount;
+    }
+
 };
 
 
@@ -1041,6 +1049,19 @@ public:
                 , numberOfSets, numberOfSetsLog2, wordSize, setMask);
     }
 
+
+    void aggragateDLC (DLC* input_dlc){
+        for (std::map<unsigned,dlcEntry*>::iterator it = dlcTable.begin(); it!=dlcTable.end(); ++it){
+
+            unsigned input_pc = it->second->PC;
+            unsigned input_inst = it->second->instCounter;
+            unsigned input_acc = it->second->accCounter;
+            unsigned input_set = it->second->setCounter;
+
+            input_dlc->backup_DLC_entry(input_pc,input_inst,input_acc,input_set);
+        }
+    }
+
     void update_DLC (unsigned input_pc, std::vector<unsigned> transaction_vector ){
 
         tempPC = input_pc;
@@ -1076,8 +1097,85 @@ public:
         }
     }
 
-    void print_DLC(){
+    void backup_DLC_entry (unsigned input_pc, unsigned input_inst, unsigned input_acc, unsigned input_set ){
 
+        tempPC = input_pc;
+
+        bool pcFound = findPC(input_pc);
+
+        if (pcFound){
+            update_dlc_entry(input_pc, input_inst, input_acc, input_set);
+        }
+        else {
+            dlcEntry *test = new dlcEntry(input_pc, input_inst, input_acc, input_set);
+            dlcTable[input_pc] = test;
+        }
+    }
+
+
+    void printTofile_DLC(FILE *dlcFile, unsigned sm_id){
+
+        fprintf(dlcFile, "-------------------------------------------------------------------------------------------------------------\n");
+        fprintf(dlcFile, "                                             DLC TABLE [%u]\n",sm_id);
+        fprintf(dlcFile, "-------------------------------------------------------------------------------------------------------------\n");
+        fprintf(dlcFile, "|           PC           |           #INST           |           #ACC           |           #SETS           |\n");
+        fprintf(dlcFile, "-------------------------------------------------------------------------------------------------------------\n");
+
+        for (std::map<unsigned,dlcEntry*>::iterator it = dlcTable.begin(); it!=dlcTable.end(); ++it){
+
+            // Print PC
+            unsigned numDigit = this->numDigits(it->second->PC);
+            unsigned totalSpace = 2 + 11 ;
+            unsigned whiteSpaces = totalSpace - numDigit;
+
+            fprintf(dlcFile, "|           %u",it->second->PC);
+            for (unsigned i=0; i<whiteSpaces; i++){
+                fprintf(dlcFile, " ");
+            }
+
+
+            // Print INST
+            numDigit = this->numDigits(it->second->instCounter);
+            totalSpace = 5 + 11 ;
+            whiteSpaces = totalSpace - numDigit;
+
+            fprintf(dlcFile, "|           %u",it->second->instCounter);
+            for (unsigned i=0; i<whiteSpaces; i++){
+                fprintf(dlcFile, " ");
+            }
+
+            numDigit = this->numDigits(it->second->accCounter);
+            totalSpace = 4 + 11 ;
+            whiteSpaces = totalSpace - numDigit;
+
+            fprintf(dlcFile, "|           %u",it->second->accCounter);
+            for (unsigned i=0; i<whiteSpaces; i++){
+                fprintf(dlcFile, " ");
+            }
+
+            numDigit = this->numDigits(it->second->setCounter);
+            totalSpace = 5 + 11 ;
+            whiteSpaces = totalSpace - numDigit;
+
+            fprintf(dlcFile, "|           %u",it->second->setCounter);
+            for (unsigned i=0; i<whiteSpaces; i++){
+                fprintf(dlcFile, " ");
+            }
+
+            fprintf(dlcFile, "|\n");
+
+            /*printf("|           %u           |           %u           |           %u           |           %u           |\n"
+            ,it->first, it->second->instCounter, it->second->accCounter, it->second->setCounter);*/
+        }
+
+        fprintf(dlcFile, "-------------------------------------------------------------------------------------------------------------\n");
+
+    }
+
+    void print_DLC(unsigned sm_id){
+
+        printf("-------------------------------------------------------------------------------------------------------------\n");
+        printf("                                             DLC TABLE [%u]\n",sm_id);
         printf("-------------------------------------------------------------------------------------------------------------\n");
         printf("|           PC           |           #INST           |           #ACC           |           #SETS           |\n");
         printf("-------------------------------------------------------------------------------------------------------------\n");
@@ -1667,9 +1765,12 @@ private:
 
         std::vector<DRSVRSTATS*> stats_obj_vector;
 
+        std::vector<DLC*> dlc_obj_vector;
+
         DRSVRSTATS *global_stats_obj;
 
         DLC *global_dlc_obj;
+        DLC *global_dlc_obj_aggr;
 
         OCW_LOGIC *global_ocw_obj;
 
@@ -1679,8 +1780,6 @@ private:
 
         unsigned OCW_VALUE;
         //bool OCW_VALID;
-
-
 
 
 public:
@@ -1694,6 +1793,8 @@ public:
         global_stats_obj = new DRSVRSTATS(d_sm_id, warpPerSM);
 
         global_dlc_obj = new DLC(32,5,128);             // DRSVR WARNING: You should add parameters instead of constants
+                                                        // Numbers does not matter anymore since we do not calculate sets manually anymore
+        global_dlc_obj_aggr = new DLC(32,5,128);
 
         global_ocw_obj = new OCW_LOGIC();
 
@@ -1710,6 +1811,55 @@ public:
         //OCW_VALID = false;
 
     }
+
+
+    void printout_dlc_tofile_singleKernel(FILE* dlcFile, unsigned target_kernel_uid){
+        dlc_obj_vector.at(target_kernel_uid)->printTofile_DLC(dlcFile,this->get_sm_id());
+    }
+
+    void printout_dlc_tofile_lastKernel(FILE* dlcFile){
+        if (dlc_obj_vector.size()>0){
+            unsigned lastKernel = dlc_obj_vector.size()-1;
+            dlc_obj_vector.at(lastKernel)->printTofile_DLC(dlcFile,this->get_sm_id());
+        }
+    }
+
+
+    void printout_dlc_tofile_multiKernel(FILE* dlcFile){
+
+        for (unsigned i=0; i<dlc_obj_vector.size() ; i++){
+            this->printout_dlc_tofile_singleKernel(dlcFile,i);
+        }
+
+    }
+
+
+    void kernel_done_bankData(unsigned kernel_id){
+
+        dlc_obj_vector.push_back(global_dlc_obj);
+
+        printf("DRSVR DLC table has been banked for kernel #%u \n;", kernel_id);
+
+        global_dlc_obj->aggragateDLC(global_dlc_obj_aggr);
+
+        //global_dlc_obj_aggr->print_DLC(this->get_sm_id());
+        //global_dlc_obj->print_DLC(this->get_sm_id());
+
+        global_dlc_obj = new DLC(32,5,128);
+        printf("DRSVR DLC table has been reset for kernel #%u \n;", kernel_id);
+
+        //global_dlc_obj->print_DLC(this->get_sm_id());
+
+        global_FCL_obj = new FCLUnit();
+        global_ocw_obj = new OCW_LOGIC();
+
+        set_OCW_value(2);
+
+        printf("DRSVR OCW RESET FOR KERNEL #%u \n;", kernel_id);
+    }
+
+
+
 
     void set_OCW_value(unsigned OCW_IN){
         OCW_VALUE = OCW_IN;
@@ -1757,9 +1907,24 @@ public:
     }
 
     void print_dlc_table(){
+        global_dlc_obj->print_DLC(this->get_sm_id());
         print_mshr_info();
-        global_dlc_obj->print_DLC();
+        printf("-------------------------------------------------------------------------------------------------------------\n");
     }
+
+    void print_dlc_table_aggregated(){
+        global_dlc_obj_aggr->print_DLC(this->get_sm_id());
+        print_mshr_info();
+        printf("-------------------------------------------------------------------------------------------------------------\n");
+    }
+
+
+    void print_dlc_table_tofile(FILE *dlcFile){
+        global_dlc_obj->printTofile_DLC(dlcFile, (this)->get_sm_id());
+        //print_mshr_info();
+        fprintf(dlcFile,"-------------------------------------------------------------------------------------------------------------\n");
+    }
+
 
     void print_dlc_transaction_history(){
         global_dlc_obj->print_transactions_history();

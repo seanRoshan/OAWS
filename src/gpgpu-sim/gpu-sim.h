@@ -388,9 +388,11 @@ class gpgpu_sim : public gpgpu_t {
 public:
 
    std::vector<DRSVR*> smObjVector;
+   FILE *dlcFile;
 
    void init_smObjVector();
    void drsvr_printDLCStats();
+   void drsvr_printDLCStats_tofile();
 
    gpgpu_sim( const gpgpu_sim_config &config);
 
