@@ -386,7 +386,13 @@ private:
 
 class gpgpu_sim : public gpgpu_t {
 public:
-   gpgpu_sim( const gpgpu_sim_config &config );
+
+   std::vector<DRSVR*> smObjVector;
+
+   void init_smObjVector();
+   void drsvr_printDLCStats();
+
+   gpgpu_sim( const gpgpu_sim_config &config);
 
    void set_prop( struct cudaDeviceProp *prop );
 

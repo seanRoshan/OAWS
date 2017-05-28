@@ -1198,7 +1198,9 @@ private:
                 printf("Set:%d ; Acc:%d Acc/Set:%f\n", Set, Acc, tempAcc/tempSet);
                 printf("DRSVR DELTA CHANGE!\n");
             }
-            Delta = CNT/2;
+            if (CNT>2){
+                Delta = CNT/2;
+            }
             // Associativity Sensitive
         }
         else{
@@ -1221,7 +1223,7 @@ private:
 
             if (FCL){
                 CNT++;
-                if ( (CNT==CMAX) && (OCW<WMAX)){
+                if ( (CNT>=CMAX) && (OCW<WMAX)){
                     OCW++;
                     CNT=0;
                 }
@@ -1230,7 +1232,7 @@ private:
                 if (CNT > Delta) {
                     CNT -= Delta;
                 } else {
-                    CNT = 0;
+                    CNT = 127;
                     if (OCW > 2) {
                         OCW--;
                     }
@@ -1250,7 +1252,7 @@ public:
     OCW_LOGIC(){
         Div = false;
         FCL = false;
-        CNT = 128;
+        CNT = 0;
         Acc = 0;
         OCW = 2;
     }
@@ -1846,19 +1848,23 @@ public:
 
     bool oawsApproved(unsigned input_PC, unsigned active_threads, unsigned gto_prio, bool OCW_Approved){
         if (global_dlc_obj->isDivergent(input_PC)){
-            if (!OCW_Approved){
-                return false;
+
+            // Locality warps should be issued anyway
+            if (OCW_Approved){
+                return true;
             }
-            unsigned Inst = global_dlc_obj->get_InstOccurance(input_PC);
+
+/*            unsigned Inst = global_dlc_obj->get_InstOccurance(input_PC);
             unsigned Acc = global_dlc_obj->get_TransactionCounts(input_PC);
             unsigned Set = global_dlc_obj->get_SetTouched(input_PC);
-/*            printf("%u is a dirvergent Load! ActiveThreads: %u/32 ; Inst: %u ; Acc : %u ; Set : %u ;\n"
+            printf("%u is a dirvergent Load! ActiveThreads: %u/32 ; Inst: %u ; Acc : %u ; Set : %u ;\n"
                     ,input_PC
                     ,active_threads
                     ,Inst
                     ,Acc
                     ,Set
             );*/
+
             return (missPred(input_PC, active_threads, gto_prio));
 
         }

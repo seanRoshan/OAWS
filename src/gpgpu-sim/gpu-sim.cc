@@ -548,6 +548,11 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
 { 
     m_shader_config = &m_config.m_shader_config;
     m_memory_config = &m_config.m_memory_config;
+
+
+    // DRSVR initialize smObj Vector
+    this->init_smObjVector();
+
     set_ptx_warp_size(m_shader_config);
     ptx_file_line_stats_create_exposed_latency_tracker(m_config.num_shader());
 
@@ -594,6 +599,11 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
     *active_sms=0;
 
     last_liveness_message_time = 0;
+
+
+
+
+
 }
 
 int gpgpu_sim::shared_mem_size() const
@@ -716,6 +726,34 @@ void gpgpu_sim::init()
 #endif
 }
 
+void gpgpu_sim::init_smObjVector(){
+
+    unsigned numberOfShaders= m_config.num_shader();
+
+    for (unsigned i=0; i<numberOfShaders; i++){
+       DRSVR *smObj = new DRSVR(i);
+       smObjVector.push_back(smObj);
+    }
+
+    printf("DRSVR smObjVector has been initialized!\n");
+}
+
+void gpgpu_sim::drsvr_printDLCStats() {
+
+    printf("-------------------------------DLC DETAILS------------------------------------\n" );
+
+    unsigned numberOfShaders= m_config.num_shader();
+
+    for (unsigned i=0; i<numberOfShaders; i++){
+        smObjVector.at(i)->print_dlc_table();
+    }
+
+    printf("----------------------------END OF DLC DETAILS--------------------------------\n" );
+
+}
+
+
+
 void gpgpu_sim::update_stats() {
     m_memory_stats->memlatstat_lat_pw();
     gpu_tot_sim_cycle += gpu_sim_cycle;
@@ -733,6 +771,8 @@ void gpgpu_sim::print_stats()
         icnt_display_overall_stats();
         printf("----------------------------END-of-Interconnect-DETAILS-------------------------\n" );
     }
+
+    drsvr_printDLCStats();
 }
 
 void gpgpu_sim::deadlock_check()
@@ -893,8 +933,6 @@ void gpgpu_sim::gpu_print_stat()
    printf("gpu_tot_sim_insn = %lld\n", gpu_tot_sim_insn+gpu_sim_insn);
    printf("gpu_tot_ipc = %12.4f\n", (float)(gpu_tot_sim_insn+gpu_sim_insn) / (gpu_tot_sim_cycle+gpu_sim_cycle));
    printf("gpu_tot_issued_cta = %lld\n", gpu_tot_issued_cta);
-
-
 
    // performance counter for stalls due to congestion.
    printf("gpu_stall_dramfull = %d\n", gpu_stall_dramfull);
@@ -1161,7 +1199,7 @@ void gpgpu_sim::cycle()
    if (clock_mask & CORE ) {
        // shader core loading (pop from ICNT into core) follows CORE clock
       for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) 
-         m_cluster[i]->icnt_cycle(); 
+         m_cluster[i]->icnt_cycle();
    }
     if (clock_mask & ICNT) {
         // pop from memory controller to interconnect

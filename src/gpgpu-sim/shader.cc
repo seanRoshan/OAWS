@@ -81,7 +81,11 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
     // DRSVR TEST SHADER CREATION:
 
     //printf("HELLODRSVR! SHADER #%u have been created!\n",shader_id);
-    drsvrObj = new DRSVR(shader_id);
+
+
+    //drsvrObj = new DRSVR(shader_id);
+    printf("Shader ID:%u", shader_id );
+    drsvrObj = gpu->smObjVector.at(shader_id);
 
     m_cluster = cluster;
     m_config = config;
@@ -1308,8 +1312,6 @@ void scheduler_unit::cycle()
             }
 
         }*/
-
-
 
         while( !warp(warp_id).waiting() && !warp(warp_id).ibuffer_empty() && (checked < max_issue) && (checked <= issued) && (issued < max_issue) /*&& ( (*iter)->oaws_approved() || warp(warp_id).ibuffer_next_inst()->op!=LOAD_OP )*/  ) {
 

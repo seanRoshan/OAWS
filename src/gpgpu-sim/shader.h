@@ -376,7 +376,7 @@ public:
                    register_set* mem_out,
                    int id)
         : m_supervised_warps(), m_stats(stats), m_shader(shader),
-        m_scoreboard(scoreboard), m_simt_stack(simt), /*m_pipeline_reg(pipe_regs),*/ m_warp(warp),
+        m_scoreboard(scoreboard), m_simt_stack(simt), /*m_pipeline_reg(pipe_regpipe_regs),*/ m_warp(warp),
         m_sp_out(sp_out),m_sfu_out(sfu_out),m_mem_out(mem_out), m_id(id){
         smObjLoaded = false;
         unsigned global_gtoprio = 0;
