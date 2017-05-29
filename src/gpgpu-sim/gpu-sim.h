@@ -391,8 +391,13 @@ public:
    FILE *dlcFile;
 
    void init_smObjVector();
+
    void drsvr_printDLCStats();
    void drsvr_printDLCStats_tofile();
+
+   void drsvr_printHistogramStats();
+   void drsvr_printHistogramSingle(std::string histogramName);
+
 
    gpgpu_sim( const gpgpu_sim_config &config);
 

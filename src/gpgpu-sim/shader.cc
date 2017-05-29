@@ -2174,9 +2174,11 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
                 printf("DRSVR FCL UNIT DLCLOCKED! [%u;%u;%u] OCW:%u\t",mf->get_wid() , mf->get_sid(), mf->get_pc(), smObj->get_OCW_value());
                 if (FCLstatus){
                     printf("PC:%u ; INST:%u ; ACC:%u ; SET:%u; FULLY CACHED!\n", PC ,INST ,ACC ,SET );
+                    smObj->update_histogram(mf->get_wid(),"FCL",1);
                 }
                 else {
                     printf("PC:%u ; INST:%u ; ACC:%u ; SET:%u; NOT FULLY CACHED!\n", PC ,INST ,ACC ,SET );
+                    smObj->update_histogram(mf->get_wid(),"FCL",0);
                 }
                 //smObj->print_dlc_table();
             }

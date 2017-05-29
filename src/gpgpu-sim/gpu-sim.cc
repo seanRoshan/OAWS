@@ -760,6 +760,42 @@ void gpgpu_sim::drsvr_printDLCStats() {
 
 }
 
+
+void gpgpu_sim::drsvr_printHistogramSingle(std::string histogramName){
+
+    unsigned numberOfShaders= m_config.num_shader();
+
+    printf("-------------------------------%s DETAILS------------------------------------\n\n", histogramName.c_str());
+
+    for (unsigned i=0; i<numberOfShaders; i++){
+        //smObjVector.at(i)->print_histogram_global_vector(histogramName);
+        smObjVector.at(i)->print_histogram_global_aggr(histogramName);
+    }
+
+    printf("----------------------------END OF %s DETAILS--------------------------------\n", histogramName.c_str());
+
+}
+
+void gpgpu_sim::drsvr_printHistogramStats(){
+
+    bool FCL = true;
+    bool OCCLUSION = true;
+
+
+    if (FCL){
+        this->drsvr_printHistogramSingle("FCL");
+        printf("\n\n");
+    }
+
+    if (OCCLUSION){
+        this->drsvr_printHistogramSingle("OCCLUSION");
+        printf("\n\n");
+    }
+
+
+
+}
+
 void gpgpu_sim::drsvr_printDLCStats_tofile() {
 
     unsigned numberOfShaders= m_config.num_shader();
@@ -802,6 +838,7 @@ void gpgpu_sim::print_stats()
     }
 
     drsvr_printDLCStats();
+    drsvr_printHistogramStats();
 
 }
 

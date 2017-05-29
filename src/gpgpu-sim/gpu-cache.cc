@@ -966,6 +966,7 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
             m_mshrs.update_oaws_memoryOcclusion(true, mf->get_wid(), addr, block_addr);
             //mf->get_inst().print_insn2();
             printf("\n");
+            smObj->update_histogram(mf->get_wid(),"OCCLUSION",1);
             this->miss_queue_print();
         }
         else {

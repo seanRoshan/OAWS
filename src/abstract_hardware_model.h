@@ -794,7 +794,7 @@ public:
 
         if (histogramVector.size()>0) {
             assert(histogramVector.size() == histogramCounterVector.size());
-            this->histogramCounterVector.clear();
+            this->histogramVector.clear();
             this->histogramCounterVector.clear();
         }
 
@@ -1493,10 +1493,6 @@ public:
 
     }
 
-
-
-
-
 };
 
 
@@ -1702,14 +1698,6 @@ public:
 
 
             }
-
-
-
-
-
-
-
-
         }
     }
 
@@ -1756,18 +1744,24 @@ public:
 
 
 
-class DRSVR {
+class DRSVR{
 
 private:
         unsigned d_sm_id;
 
         const unsigned warpPerSM = 24;
 
-        std::vector<DRSVRSTATS*> stats_obj_vector;
+        std::vector<DRSVRSTATS*> stats_warps_obj_vector;
+
+        std::vector<std::vector<DRSVRSTATS*>> stats_kernels_obj_vector;
+
+        std::vector<DRSVRSTATS*> stats_kernels_obj_global;
+
 
         std::vector<DLC*> dlc_obj_vector;
 
         DRSVRSTATS *global_stats_obj;
+        DRSVRSTATS *stats_kernels_obj_global_aggr;
 
         DLC *global_dlc_obj;
         DLC *global_dlc_obj_aggr;
@@ -1790,7 +1784,7 @@ public:
 
         d_sm_id = input_sm_id;
 
-        global_stats_obj = new DRSVRSTATS(d_sm_id, warpPerSM);
+        //global_stats_obj = new DRSVRSTATS(d_sm_id, warpPerSM);
 
         global_dlc_obj = new DLC(32,5,128);             // DRSVR WARNING: You should add parameters instead of constants
                                                         // Numbers does not matter anymore since we do not calculate sets manually anymore
@@ -1798,20 +1792,34 @@ public:
 
         global_ocw_obj = new OCW_LOGIC();
 
-        for (unsigned d_warp_id=0; d_warp_id<warpPerSM; d_warp_id++) {
-
-            DRSVRSTATS *statsObj_temp = new DRSVRSTATS(d_sm_id, d_warp_id);
-            stats_obj_vector.push_back(statsObj_temp);
-
-        }
-
         global_FCL_obj = new FCLUnit();
 
         OCW_VALUE = 2;
         //OCW_VALID = false;
 
+        stats_kernels_obj_global_aggr = new DRSVRSTATS(d_sm_id, warpPerSM);
+
+        this->initialize_stats_warps_obj_vector(false);
     }
 
+
+    void initialize_stats_warps_obj_vector(bool bankIt){
+
+        if (bankIt){
+            stats_kernels_obj_vector.push_back(stats_warps_obj_vector);
+            stats_kernels_obj_global.push_back(global_stats_obj);
+        }
+
+        stats_warps_obj_vector.clear();
+
+        for (unsigned d_warp_id=0; d_warp_id<warpPerSM; d_warp_id++) {
+            DRSVRSTATS *statsObj_temp = new DRSVRSTATS(d_sm_id, d_warp_id);
+            stats_warps_obj_vector.push_back(statsObj_temp);
+        }
+
+        global_stats_obj = new DRSVRSTATS(d_sm_id, warpPerSM);
+
+    }
 
     void printout_dlc_tofile_singleKernel(FILE* dlcFile, unsigned target_kernel_uid){
         dlc_obj_vector.at(target_kernel_uid)->printTofile_DLC(dlcFile,this->get_sm_id());
@@ -1832,7 +1840,6 @@ public:
         }
 
     }
-
 
     void kernel_done_bankData(unsigned kernel_id){
 
@@ -1856,9 +1863,15 @@ public:
         set_OCW_value(2);
 
         printf("DRSVR OCW RESET FOR KERNEL #%u \n;", kernel_id);
+
+
+        this->print_histogram_global("FCL");
+        //this->print_histogram_vector("FCL");
+
+        this->initialize_stats_warps_obj_vector(true);
+
+
     }
-
-
 
 
     void set_OCW_value(unsigned OCW_IN){
@@ -1874,18 +1887,36 @@ public:
     }
 
 
-
     void update_histogram(unsigned input_warp_id, std::string histogramName, unsigned input_data){
-        stats_obj_vector.at(input_warp_id)->update_histogram(histogramName, input_data);
+        stats_warps_obj_vector.at(input_warp_id)->update_histogram(histogramName, input_data);
         global_stats_obj->update_histogram(histogramName, input_data);
+        stats_kernels_obj_global_aggr->update_histogram(histogramName, input_data);
     }
 
     void print_histogram(unsigned input_warp_id, std::string histogramName){
-        stats_obj_vector.at(input_warp_id)->print_histogram(histogramName);
+        stats_warps_obj_vector.at(input_warp_id)->print_histogram(histogramName);
     }
 
     void print_histogram_global(std::string histogramName){
         global_stats_obj->print_histogram(histogramName);
+    }
+
+    void print_histogram_global_aggr(std::string histogramName){
+        stats_kernels_obj_global_aggr->print_histogram(histogramName);
+    }
+
+
+    void print_histogram_global_vector(std::string histogramName){
+        for (unsigned i=0; i<stats_kernels_obj_global.size(); i++){
+            stats_kernels_obj_global.at(i)->print_histogram(histogramName);
+        }
+    }
+
+    void print_histogram_vector(std::string histogramName){
+        global_stats_obj->print_histogram(histogramName);
+        for (unsigned i=0; i<stats_warps_obj_vector.size(); i++){
+            stats_warps_obj_vector.at(i)->print_histogram(histogramName);
+        }
     }
 
     void update_dlc_table_V2 (unsigned input_warpid, unsigned input_sm_id, unsigned input_pc, std::vector<unsigned> transaction_vector, bool isWrite ){
