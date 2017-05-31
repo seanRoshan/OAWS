@@ -1405,6 +1405,10 @@ private:
     unsigned  s_warp_id;
 
     Histogram* create_new_histogram_obj (std::string myHistogramName) {
+
+        //stats_name_vector.clear();
+        //stats_obj_vector.clear();
+
         Histogram *warp_parts_obj = new Histogram(myHistogramName, s_sm_id, s_warp_id);
         return (warp_parts_obj);
     }
@@ -1416,6 +1420,9 @@ private:
     }
 
     unsigned get_stat_vector_size() {
+        if (stats_name_vector.size()!=stats_obj_vector.size()){
+            printf("Something is Wrong: Name:%u ; Obj:%u", stats_name_vector.size(), stats_obj_vector.size());
+        }
         assert(stats_name_vector.size()==stats_obj_vector.size());
         return (this->stats_name_vector.size());
     }
@@ -1452,6 +1459,8 @@ public:
     DRSVRSTATS (unsigned sm_id_input, unsigned warp_id_input) {
         s_sm_id = sm_id_input;
         s_warp_id = warp_id_input;
+        stats_name_vector.clear();
+        stats_obj_vector.clear();
     }
 
     void update_histogram(std::string histogramName_input, unsigned input_data){
@@ -1467,7 +1476,11 @@ public:
         }
 
         // Update an existing histogram
-        this->stats_obj_vector.at(foundIndex)->update_histogram(input_data);
+        if (stats_obj_vector.size()>0){
+            assert(foundIndex<stats_obj_vector.size());
+            this->stats_obj_vector.at(foundIndex)->update_histogram(input_data);
+        }
+
 
     }
 
@@ -1749,11 +1762,11 @@ class DRSVR{
 private:
         unsigned d_sm_id;
 
-        const unsigned warpPerSM = 24;
+        const unsigned warpPerSM = 48;
 
         std::vector<DRSVRSTATS*> stats_warps_obj_vector;
 
-        std::vector<std::vector<DRSVRSTATS*>> stats_kernels_obj_vector;
+        std::vector<std::vector<DRSVRSTATS*> > stats_kernels_obj_vector;
 
         std::vector<DRSVRSTATS*> stats_kernels_obj_global;
 
@@ -1813,16 +1826,22 @@ public:
         stats_warps_obj_vector.clear();
 
         for (unsigned d_warp_id=0; d_warp_id<warpPerSM; d_warp_id++) {
+
             DRSVRSTATS *statsObj_temp = new DRSVRSTATS(d_sm_id, d_warp_id);
             stats_warps_obj_vector.push_back(statsObj_temp);
+            delete statsObj_temp;
         }
 
+        //delete global_stats_obj;
         global_stats_obj = new DRSVRSTATS(d_sm_id, warpPerSM);
+
 
     }
 
     void printout_dlc_tofile_singleKernel(FILE* dlcFile, unsigned target_kernel_uid){
-        dlc_obj_vector.at(target_kernel_uid)->printTofile_DLC(dlcFile,this->get_sm_id());
+        if (dlc_obj_vector.size()>0){
+            dlc_obj_vector.at(target_kernel_uid)->printTofile_DLC(dlcFile,this->get_sm_id());
+        }
     }
 
     void printout_dlc_tofile_lastKernel(FILE* dlcFile){
@@ -1888,9 +1907,14 @@ public:
 
 
     void update_histogram(unsigned input_warp_id, std::string histogramName, unsigned input_data){
+
+        //printf("DRSVR 1 TEST UPATE_HISTOGRAM: %u", input_warp_id);
         stats_warps_obj_vector.at(input_warp_id)->update_histogram(histogramName, input_data);
+        //printf("DRSVR 2 TEST UPATE_HISTOGRAM: %u", input_warp_id);
         global_stats_obj->update_histogram(histogramName, input_data);
+        //printf("DRSVR 3 TEST UPATE_HISTOGRAM: %u", input_warp_id);
         stats_kernels_obj_global_aggr->update_histogram(histogramName, input_data);
+        //printf("DRSVR 4 TEST UPATE_HISTOGRAM: %u", input_warp_id);
     }
 
     void print_histogram(unsigned input_warp_id, std::string histogramName){

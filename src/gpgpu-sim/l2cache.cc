@@ -294,7 +294,7 @@ void memory_partition_unit::print( FILE *fp ) const
 
 memory_sub_partition::memory_sub_partition( unsigned sub_partition_id, 
                                             const struct memory_config *config,
-                                            class memory_stats_t *stats )
+                                            class memory_stats_t *stats)
 {
     m_id = sub_partition_id;
     m_config=config;
@@ -306,6 +306,7 @@ memory_sub_partition::memory_sub_partition( unsigned sub_partition_id,
     snprintf(L2c_name, 32, "L2_bank_%03d", m_id);
     m_L2interface = new L2interface(this);
     m_mf_allocator = new partition_mf_allocator(config);
+
 
     if(!m_config->m_L2_config.disabled())
        m_L2cache = new l2_cache(L2c_name,m_config->m_L2_config,-1,-1,m_L2interface,m_mf_allocator,IN_PARTITION_L2_MISS_QUEUE);

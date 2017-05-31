@@ -480,6 +480,11 @@ public:
         return alreadyOccluded;
     }
 
+    DRSVR* getSMObj(){
+        if (smObjLoaded)
+        return smObj;
+    }
+
     void resetOcclusionFlag(){
         alreadyOccluded = false;
         occluded_warpid = 0;
@@ -812,8 +817,8 @@ protected:
 /// Read only cache
 class read_only_cache : public baseline_cache {
 public:
-    read_only_cache( const char *name, cache_config &config, int core_id, int type_id, mem_fetch_interface *memport, enum mem_fetch_status status )
-    : baseline_cache(name,config,core_id,type_id,memport,status){}
+    read_only_cache( const char *name, cache_config &config, int core_id, int type_id, mem_fetch_interface *memport, enum mem_fetch_status status, DRSVR * smObj_in )
+    : baseline_cache(name,config,core_id,type_id,memport,status, smObj_in){}
 
     /// Access cache for read_only_cache: returns RESERVATION_FAIL if request could not be accepted (for any reason)
     virtual enum cache_request_status access( new_addr_type addr, mem_fetch *mf, unsigned time, std::list<cache_event> &events );
@@ -1080,7 +1085,7 @@ class l2_cache : public data_cache {
 public:
     l2_cache(const char *name,  cache_config &config,
             int core_id, int type_id, mem_fetch_interface *memport,
-            mem_fetch_allocator *mfcreator, enum mem_fetch_status status )
+            mem_fetch_allocator *mfcreator, enum mem_fetch_status status)
             : data_cache(name,config,core_id,type_id,memport,mfcreator,status, L2_WR_ALLOC_R, L2_WRBK_ACC){}
 
     virtual ~l2_cache() {}

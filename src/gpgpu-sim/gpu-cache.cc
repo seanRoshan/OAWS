@@ -486,7 +486,7 @@ void mshr_table::display( FILE *fp ) const{
 }
 
 void mshr_table::print() const{
-    printf("MSHR contents Size:%u\n", m_data.size());
+    printf("DRSVR 2 MSHR contents Size:%u\n", m_data.size());
     printf("----------------------------------------------------------------------");
     for ( table::const_iterator e=m_data.begin(); e!=m_data.end(); ++e ) {
         unsigned block_addr = e->first;
@@ -511,7 +511,7 @@ void mshr_table::print2() const{
 
 
     printf("----------------------------------------------------------------------\n");
-    printf("MSHR contents Size:%u\n", m_data.size());
+    printf("DRSVR 4 MSHR contents Size:%u\n", m_data.size());
     printf("----------------------------------------------------------------------");
     for ( table::const_iterator e=m_data.begin(); e!=m_data.end(); ++e ) {
         unsigned block_addr = e->first;
@@ -524,6 +524,8 @@ void mshr_table::print2() const{
             printf(" no memory requests???\n");
         }
     }
+
+    printf("\nDRSVR OK HERE!\n");
 
     //printf("----------------------------------------------------------------------\n");
 }
@@ -548,6 +550,7 @@ void mshr_table::update_oaws_memoryOcclusion(bool print, unsigned in_warpid, new
             printf(" %llu ;\n", memoryOcclusion);
             this->print2();
         }
+        printf("DRSVR OK HERE 2!\n");
     }
 
 
@@ -918,13 +921,17 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
 
     if ( mshr_hit && mshr_avail ) {
 
-        if (m_mshrs.isAlreadyOccluded(mf->get_wid(), addr, block_addr)){
-            m_mshrs.resetOcclusionFlag();
-            printf("DRSVR 1 MSHR HIT:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ;\n", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str() );
-            mf->get_inst().print_insn2();
-            printf("\n");
-            printf("Occlusion Solved!\n");
+        std::size_t found = m_name.find("L1D");
+        if (found!=std::string::npos){
+            if (m_mshrs.isAlreadyOccluded(mf->get_wid(), addr, block_addr)){
+                m_mshrs.resetOcclusionFlag();
+                printf("DRSVR 1 MSHR HIT:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ;\n", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str() );
+                mf->get_inst().print_insn2();
+                printf("\n");
+                printf("Occlusion Solved!\n");
+            }
         }
+
     	if(read_only)
     		m_tag_array->access(block_addr,time,cache_index);
     	else
@@ -934,13 +941,18 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
         do_miss = true;
     } else if ( !mshr_hit && mshr_avail && (m_miss_queue.size() < m_config.m_miss_queue_size) ) {
 
-        if (m_mshrs.isAlreadyOccluded(mf->get_wid(), addr, block_addr)){
-            m_mshrs.resetOcclusionFlag();
-            printf("DRSVR 2 MSHR NOT HIT:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ;\n", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str() );
-            mf->get_inst().print_insn2();
-            printf("\n");
-            printf("Occlusion Solved!\n");
+
+        std::size_t found = m_name.find("L1D");
+        if (found!=std::string::npos){
+            if (m_mshrs.isAlreadyOccluded(mf->get_wid(), addr, block_addr)){
+                m_mshrs.resetOcclusionFlag();
+                printf("DRSVR 2 MSHR NOT HIT:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ;\n", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str() );
+                mf->get_inst().print_insn2();
+                printf("\n");
+                printf("Occlusion Solved!\n");
+            }
         }
+
         if (read_only)
             m_tag_array->access(block_addr, time, cache_index);
         else
@@ -961,39 +973,60 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
         // DRSVR: TO FIND MEMORY OCCLUSION
     else if ( (!mshr_hit) && ( (!mshr_avail) || (m_miss_queue.size() >= m_config.m_miss_queue_size)  ) ) {
         // Memory occlusion
-        if (!m_mshrs.isAlreadyOccluded(mf->get_wid(), addr, block_addr)){
-            printf("DRSVR MSHR OCCLUSION:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ; Occlusion:", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str() );
-            m_mshrs.update_oaws_memoryOcclusion(true, mf->get_wid(), addr, block_addr);
-            //mf->get_inst().print_insn2();
-            printf("\n");
-            smObj->update_histogram(mf->get_wid(),"OCCLUSION",1);
-            this->miss_queue_print();
+
+        std::size_t found = m_name.find("L1D");
+        if (found!=std::string::npos){
+
+            if (!m_mshrs.isAlreadyOccluded(mf->get_wid(), addr, block_addr)){
+                printf("DRSVR MSHR OCCLUSION:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; name:%s ; warp_id:%u ; mask:%s ; Occlusion:", mf->get_sid(), mf->get_pc(), addr, block_addr, m_name.c_str(), mf->get_wid(), mf->get_access_warp_mask().to_string().c_str() );
+                m_mshrs.update_oaws_memoryOcclusion(true, mf->get_wid(), addr, block_addr);
+                //mf->get_inst().print_insn2();
+                printf("\n");
+
+
+                assert(smObj);
+                smObj->update_histogram(mf->get_wid(),"OCCLUSION",1);
+                //printf("DRSVR update after histogram!\n");
+
+                this->miss_queue_print();
+            }
+
+
         }
+
         else {
             unsigned replayCount = m_mshrs.occlusionReplayed();
-            /*printf("DRSVR MSHR OCCLUSION REPLAY:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ; Replay:%u", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str(), replayCount );
+            printf("DRSVR MSHR OCCLUSION REPLAY:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ; Replay:%u", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str(), replayCount );
             mf->get_inst().print_insn2();
-            printf("\n");*/
+            printf("\n");
         }
 
     }
 
-    m_mshrs.update_oaws_status(m_mshrs.get_available_count(),m_miss_queue.size());
 
-    if (smObj){
-        if ( /*(smObj->get_sm_id()==9) &&*/ DRSVRdebug) {
-            printf("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");
-            m_mshrs.print2();
-            printf("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");
-            std::list<mem_fetch*>::const_iterator it;
-            //mem_fetch test;
-            printf("DRSVR Miss Queue:  Miss Queue Size: %u; Available MSHR: %u ; Miss on Flight: %u;\n",m_mshrs.get_available_count(),m_miss_queue.size(), m_mshrs.get_missOnFlight());
-            for ( it = m_miss_queue.begin(); it != m_miss_queue.end(); ++it) {
-                printf("DRSVR Miss Queue: SM ID: %u ; Warp ID: %u ; PC: %u \n",(*it)->get_sid(), (*it)->get_wid(), (*it)->get_pc());
+    std::size_t found = m_name.find("L1D");
+    if (found!=std::string::npos){
+        m_mshrs.update_oaws_status(m_mshrs.get_available_count(),m_miss_queue.size());
+
+        if (smObj){
+            if (DRSVRdebug) {
+                printf("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");
+                m_mshrs.print2();
+                printf("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");
+                std::list<mem_fetch*>::const_iterator it;
+                //mem_fetch test;
+                printf("DRSVR Miss Queue:  Miss Queue Size: %u; Available MSHR: %u ; Miss on Flight: %u;\n",m_mshrs.get_available_count(),m_miss_queue.size(), m_mshrs.get_missOnFlight());
+                for ( it = m_miss_queue.begin(); it != m_miss_queue.end(); ++it) {
+                    printf("DRSVR Miss Queue: SM ID: %u ; Warp ID: %u ; PC: %u \n",(*it)->get_sid(), (*it)->get_wid(), (*it)->get_pc());
+                }
+                printf("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");
             }
-            printf("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n");
         }
+
     }
+
+
+
 
 
 }
