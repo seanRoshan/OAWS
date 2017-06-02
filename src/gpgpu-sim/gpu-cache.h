@@ -131,6 +131,9 @@ enum set_index_function{
 
 class cache_config {
 public:
+
+    unsigned occlusionPrintoutFlag = 0;
+
     cache_config() 
     { 
         m_valid = false; 
@@ -232,13 +235,13 @@ public:
         return m_nset_log2;
     }
 
-
     bool disabled() const { return m_disabled;}
     unsigned get_line_sz() const
     {
         assert( m_valid );
         return m_line_sz;
     }
+
     unsigned get_num_lines() const
     {
         assert( m_valid );

@@ -28,9 +28,6 @@
 #ifndef ABSTRACT_HARDWARE_MODEL_INCLUDED
 #define ABSTRACT_HARDWARE_MODEL_INCLUDED
 
-
-
-
 // Forward declarations
 class gpgpu_sim;
 class kernel_info_t;
@@ -70,6 +67,7 @@ enum FuncCache
 #include <stdio.h>
 #include <csignal>
 #include <bitset>
+#include <math.h>
 
 typedef unsigned long long new_addr_type;
 typedef unsigned address_type;
@@ -741,30 +739,98 @@ class Histogram {
 
 private:
 
-    std::vector<unsigned> histogramVector;
     std::vector<unsigned> histogramCounterVector;
+
+    std::vector<unsigned> histogramVector;  // 0
+    std::vector<double> histogramVector_double; // 1
+    std::vector<unsigned long long> histogramVector_long; // 2
+    std::vector<std::string> histogramVector_string; // 3
 
     std::string histogramName;
 
     unsigned h_sm_id;
     unsigned h_warp_id;
 
+    unsigned type;
+
 
 public:
 
-    Histogram(std::string inputName, unsigned input_sm_id , unsigned input_warp_id) {
+    /*Histogram(std::string inputName, unsigned input_sm_id , unsigned input_warp_id) {
 
         this->histogramName = inputName;
         this->h_sm_id = input_sm_id;
         this->h_warp_id = input_warp_id;
 
-        this->reset_histogram();
+        this->reset_histogram(false);
 
-        //printf("INSID\E DRSVR %s Histogram : h_sm_id: %u ; h_warp_id: %u ;\n", histogramName.c_str(), h_sm_id, h_warp_id);
+    }*/
+
+
+    Histogram(std::string inputName, unsigned input_sm_id , unsigned input_warp_id, unsigned type) {
+
+
+        this->histogramName = inputName;
+        this->h_sm_id = input_sm_id;
+        this->h_warp_id = input_warp_id;
+        this->type = type;
+
+        this->reset_histogram();
 
     }
 
+
+    void reset_histogram () {
+
+        histogramCounterVector.clear();
+
+        histogramVector.clear();
+        histogramVector_double.clear();
+        histogramVector_long.clear();
+        histogramVector_string.clear();
+
+    }
+
+    void update_histogram_double(double input_date){
+
+        assert(type==1);
+
+        bool matched = false;
+
+        for (unsigned i=0; i<histogramVector_double.size(); i++) {
+
+            assert(matched==false);
+
+            /*double epsilon = 0.00000000001;
+
+            if (fabs(histogramVector_double.at(i)-input_date<epsilon)<epsilon){
+                histogramCounterVector.at(i)++;
+                matched = true;
+                break;
+            }*/
+
+            if (histogramVector_double.at(i)==input_date){
+                histogramCounterVector.at(i)++;
+                matched = true;
+                break;
+            }
+
+        }
+
+        if (!matched) {
+            assert(matched==false);
+            histogramVector_double.push_back(input_date);
+            histogramCounterVector.push_back(1);
+        }
+
+
+    }
+
+
     void update_histogram (unsigned input_data) {
+
+
+        assert(type==0);
 
         bool matched = false;
 
@@ -790,19 +856,17 @@ public:
 
     }
 
-    void reset_histogram () {
 
-        if (histogramVector.size()>0) {
-            assert(histogramVector.size() == histogramCounterVector.size());
-            this->histogramVector.clear();
-            this->histogramCounterVector.clear();
-        }
-
-    }
 
     void sort_histogram_byCounter(){
 
-        assert(histogramVector.size() == histogramCounterVector.size());
+        if (type == 0){
+            assert(histogramCounterVector.size() == histogramVector.size());
+        }
+
+        if (type == 1){
+            assert(histogramCounterVector.size() == histogramVector_double.size());
+        }
 
         if (histogramVector.size()>0){
             for (unsigned i=0; i<histogramCounterVector.size(); i++){
@@ -824,23 +888,53 @@ public:
 
     void sort_histogram_byName(){
 
-        assert(histogramVector.size() == histogramCounterVector.size());
+        if (type == 0){
 
-        if (histogramVector.size()>0){
-            for (unsigned i=0; i<histogramVector.size(); i++){
-                for (unsigned j=0; j<histogramVector.size()-1; j++){
-                    if (histogramVector.at(j)>histogramVector.at(j+1)){
-                        unsigned temp = histogramCounterVector.at(j);
-                        histogramCounterVector.at(j) = histogramCounterVector.at(j+1);
-                        histogramCounterVector.at(j+1) = temp;
+            assert(histogramCounterVector.size() == histogramVector.size());
 
-                        temp = histogramVector.at(j);
-                        histogramVector.at(j)=histogramVector.at(j+1);
-                        histogramVector.at(j+1)=temp;
+            if (histogramVector.size()>0){
+
+                for (unsigned i=0; i<histogramVector.size(); i++){
+                    for (unsigned j=0; j<histogramVector.size()-1; j++){
+                        if (histogramVector.at(j)>histogramVector.at(j+1)){
+
+                            unsigned temp = histogramCounterVector.at(j);
+                            histogramCounterVector.at(j) = histogramCounterVector.at(j+1);
+                            histogramCounterVector.at(j+1) = temp;
+
+                            temp = histogramVector.at(j);
+                            histogramVector.at(j)=histogramVector.at(j+1);
+                            histogramVector.at(j+1)=temp;
+
+                        }
+                    }
+                }
+
+            }
+        }
+
+        if (type == 1) {
+
+            assert(histogramCounterVector.size() == histogramVector_double.size());
+
+            if (histogramVector_double.size() > 0) {
+                for (unsigned i = 0; i < histogramVector_double.size(); i++) {
+                    for (unsigned j = 0; j < histogramVector_double.size() - 1; j++) {
+                        if (histogramVector_double.at(j) > histogramVector_double.at(j + 1)) {
+
+                            unsigned temp = histogramCounterVector.at(j);
+                            histogramCounterVector.at(j) = histogramCounterVector.at(j + 1);
+                            histogramCounterVector.at(j + 1) = temp;
+
+                            double tempD;
+                            tempD = histogramVector_double.at(j);
+                            histogramVector_double.at(j) = histogramVector_double.at(j + 1);
+                            histogramVector_double.at(j + 1) = tempD;
+
+                        }
                     }
                 }
             }
-
         }
     }
 
@@ -853,45 +947,82 @@ public:
         }
     }
 
-    void print_histogram () {
+    void print_histogram() {
 
-        assert(histogramCounterVector.size() == histogramVector.size());
+        if (type == 0){
 
-        this->sort_histogram_byName();
+            assert(histogramCounterVector.size() == histogramVector.size());
 
-        if (histogramVector.size()>0) {
+            this->sort_histogram_byName();
 
-            char headerBuffer [100];
+            if (histogramVector.size()>0) {
 
-            unsigned headerSize = sprintf(headerBuffer,"######################### DRSVR - [SM: %u ; WARP: %u] - %s #########################\n"
-                    , this->h_sm_id
-                    , this->h_warp_id
-                    , histogramName.c_str());
+                char headerBuffer[100];
 
+                unsigned headerSize = sprintf(headerBuffer,
+                                              "######################### DRSVR - [SM: %u ; WARP: %u] - %s #########################\n",
+                                              this->h_sm_id, this->h_warp_id, histogramName.c_str());
 
-            printf("######################### DRSVR - [SM: %u ; WARP: %u] - %s #########################\n"
-                    , this->h_sm_id
-                    , this->h_warp_id
-                    , histogramName.c_str());
-            for (unsigned i=0; i<histogramVector.size(); i++){
-                printf("%s[%u] : %u\n"
-                        , histogramName.c_str()
-                        , histogramVector.at(i)
-                        , histogramCounterVector.at(i));
+                printf("######################### DRSVR - [SM: %u ; WARP: %u] - %s #########################\n"
+                        , this->h_sm_id
+                        , this->h_warp_id
+                        , histogramName.c_str());
+
+                for (unsigned i=0; i<histogramVector.size(); i++){
+                    printf("%s[%u] : %u\n"
+                            , histogramName.c_str()
+                            , histogramVector.at(i)
+                            , histogramCounterVector.at(i));
+                }
+
+                for (unsigned i=0; i<headerSize-1; i++){
+                    printf("#");
+                }
+
+                printf("\n\n");
+
             }
 
-            for (unsigned i=0; i<headerSize-1; i++){
-                printf("#");
+        }
+
+        if (type == 1){
+
+            assert(histogramCounterVector.size() == histogramVector_double.size());
+
+            this->sort_histogram_byName();
+
+            if (histogramVector_double.size()>0) {
+
+                char headerBuffer[100];
+
+                unsigned headerSize = sprintf(headerBuffer,
+                                              "######################### DRSVR - [SM: %u ; WARP: %u] - %s #########################\n",
+                                              this->h_sm_id, this->h_warp_id, histogramName.c_str());
+
+                printf("######################### DRSVR - [SM: %u ; WARP: %u] - %s #########################\n"
+                        , this->h_sm_id
+                        , this->h_warp_id
+                        , histogramName.c_str());
+
+                for (unsigned i=0; i<histogramVector_double.size(); i++){
+                    printf("%s[%4.4f] : %u\n"
+                            , histogramName.c_str()
+                            , histogramVector_double.at(i)
+                            , histogramCounterVector.at(i));
+                }
+
+                for (unsigned i=0; i<headerSize-1; i++){
+                    printf("#");
+                }
+
+                printf("\n\n");
+
             }
 
-            printf("\n\n");
 
         }
 
     }
-
-
-
 };
 
 struct dlcEntry {
@@ -1459,12 +1590,8 @@ private:
     unsigned  s_sm_id;
     unsigned  s_warp_id;
 
-    Histogram* create_new_histogram_obj (std::string myHistogramName) {
-
-        //stats_name_vector.clear();
-        //stats_obj_vector.clear();
-
-        Histogram *warp_parts_obj = new Histogram(myHistogramName, s_sm_id, s_warp_id);
+    Histogram* create_new_histogram_obj (std::string myHistogramName, unsigned type) {
+        Histogram *warp_parts_obj = new Histogram(myHistogramName, s_sm_id, s_warp_id, type);
         return (warp_parts_obj);
     }
 
@@ -1526,7 +1653,7 @@ public:
         if (foundIndex == statVectorSize){
             // Create a new Histogram
             this->stats_name_vector.push_back(histogramName_input);
-            this->stats_obj_vector.push_back(this->create_new_histogram_obj(histogramName_input));
+            this->stats_obj_vector.push_back(this->create_new_histogram_obj(histogramName_input,0));
             foundIndex = get_last_element_index();
         }
 
@@ -1538,6 +1665,31 @@ public:
 
 
     }
+
+
+    void update_histogram_double(std::string histogramName_input, double input_data){
+
+        unsigned statVectorSize = this->get_stat_vector_size();
+        unsigned foundIndex = this->search_histogram(histogramName_input);
+
+        if (foundIndex == statVectorSize){
+            // Create a new Histogram
+            this->stats_name_vector.push_back(histogramName_input);
+            this->stats_obj_vector.push_back(this->create_new_histogram_obj(histogramName_input,1));
+            foundIndex = get_last_element_index();
+        }
+
+        // Update an existing histogram
+        if (stats_obj_vector.size()>0){
+            assert(foundIndex<stats_obj_vector.size());
+            this->stats_obj_vector.at(foundIndex)->update_histogram_double(input_data);
+        }
+
+
+    }
+
+
+
 
     void print_histogram (std::string histogramName_input){
 
@@ -1568,7 +1720,7 @@ class FCLUnit {
 
 private:
 
-    bool debugMode = true;
+    bool debugMode = false;
 
     bool startTracking;
     bool dlcLock;
@@ -1580,6 +1732,8 @@ private:
     unsigned LOAD_COUNT;
     unsigned MISS_COUNT;
     unsigned HIT_COUNT;
+
+    double ratio;
 
 
     std::bitset<64> SetBitSet;
@@ -1717,6 +1871,16 @@ public:
         this->resetStat();
     }
 
+    void enableDebugMode(){
+        debugMode = true;
+    }
+
+
+    double getRatio(){
+        assert(FCLValid);
+        return ratio;
+    }
+
     void update_FCLUnit(unsigned WARP_ID_IN, unsigned SM_ID_IN, unsigned PC_IN, unsigned LOAD_COUNT_IN, unsigned status, unsigned set, bool is_write){
 
         bool isLoad = !is_write;
@@ -1759,11 +1923,11 @@ public:
                         FCL = false;
                     }
 
+                    ratio = static_cast<double>(HIT_COUNT)/LOAD_COUNT;
+
                     FCLValid = true;
 
                 }
-
-
 
             }
         }
@@ -1846,6 +2010,7 @@ private:
 
 public:
 
+
     FCLUnit *global_FCL_obj;
 
     DRSVR(unsigned input_sm_id) {
@@ -1868,6 +2033,10 @@ public:
         stats_kernels_obj_global_aggr = new DRSVRSTATS(d_sm_id, warpPerSM);
 
         this->initialize_stats_warps_obj_vector(false);
+    }
+
+    void enableFCLDebug(){
+        global_FCL_obj->enableDebugMode();
     }
 
     void initialize_stats_warps_obj_vector(bool bankIt){
@@ -1917,33 +2086,16 @@ public:
     void kernel_done_bankData(unsigned kernel_id){
 
         dlc_obj_vector.push_back(global_dlc_obj);
-
-        printf("DRSVR DLC table has been banked for kernel #%u \n;", kernel_id);
-
         global_dlc_obj->aggragateDLC(global_dlc_obj_aggr);
-
-        //global_dlc_obj_aggr->print_DLC(this->get_sm_id());
-        //global_dlc_obj->print_DLC(this->get_sm_id());
-
         global_dlc_obj = new DLC(32,5,128);
-        printf("DRSVR DLC table has been reset for kernel #%u \n;", kernel_id);
-
-        //global_dlc_obj->print_DLC(this->get_sm_id());
 
         global_FCL_obj = new FCLUnit();
         global_ocw_obj = new OCW_LOGIC();
 
         set_OCW_value(2);
 
-        printf("DRSVR OCW RESET FOR KERNEL #%u \n;", kernel_id);
-
-
-        this->print_histogram_global("FCL");
-        //this->print_histogram_vector("FCL");
-
+        //this->print_histogram_global("FCL");
         this->initialize_stats_warps_obj_vector(true);
-
-
     }
 
 
@@ -1961,14 +2113,15 @@ public:
 
 
     void update_histogram(unsigned input_warp_id, std::string histogramName, unsigned input_data){
-
-        //printf("DRSVR 1 TEST UPATE_HISTOGRAM: %u", input_warp_id);
         stats_warps_obj_vector.at(input_warp_id)->update_histogram(histogramName, input_data);
-        //printf("DRSVR 2 TEST UPATE_HISTOGRAM: %u", input_warp_id);
         global_stats_obj->update_histogram(histogramName, input_data);
-        //printf("DRSVR 3 TEST UPATE_HISTOGRAM: %u", input_warp_id);
         stats_kernels_obj_global_aggr->update_histogram(histogramName, input_data);
-        //printf("DRSVR 4 TEST UPATE_HISTOGRAM: %u", input_warp_id);
+    }
+
+    void update_histogram_double(unsigned input_warp_id, std::string histogramName, double input_data){
+        stats_warps_obj_vector.at(input_warp_id)->update_histogram_double(histogramName, input_data);
+        global_stats_obj->update_histogram_double(histogramName, input_data);
+        stats_kernels_obj_global_aggr->update_histogram_double(histogramName,input_data);
     }
 
     void print_histogram(unsigned input_warp_id, std::string histogramName){

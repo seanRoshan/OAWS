@@ -242,6 +242,9 @@ struct memory_config {
    unsigned rop_latency;
    unsigned dram_latency;
 
+   unsigned drsvr_stats_runtime_occlusionStats;
+
+
    // DRAM parameters
 
    unsigned tCCDL;  //column to column delay when bank groups are enabled
@@ -277,21 +280,6 @@ struct memory_config {
 
    unsigned icnt_flit_size;
 
-
-   /*
-   DRSVR *smObj;
-   bool smObj_Load = false;
-
-   void load_smObj(DRSVR *drsvrObj) {
-        smObj = drsvrObj;
-        smObj_Load = true;
-   }
-
-   DRSVR* get_smObj (){
-       assert(smObj_Load);
-       return (smObj);
-   }
-   */
 };
 
 // global counters and flags (please try not to add to this list!!!)

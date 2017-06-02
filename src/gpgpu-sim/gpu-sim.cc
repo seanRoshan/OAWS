@@ -192,6 +192,7 @@ void memory_config::reg_options(class OptionParser * opp)
                      "DRAM latency (default 30)",
                      "30");
 
+
     m_address_mapping.addrdec_setoption(opp);
 }
 
@@ -377,6 +378,8 @@ void shader_core_config::reg_options(class OptionParser * opp)
     option_parser_register(opp, "-drsvr_stats_runtime_ocw_throttling", OPT_INT32, &drsvr_stats_runtime_ocw_throttling, "DRSVR drsvr_stats_runtime_ocw_throttling", "0");
     option_parser_register(opp, "-drsvr_stats_runtime_oaws", OPT_INT32, &drsvr_stats_runtime_oaws, "DRSVR drsvr_stats_runtime_oaws", "0");
     option_parser_register(opp, "-drsvr_stats_runtime_ocw_estimation", OPT_INT32, &drsvr_stats_runtime_ocw_estimation, "DRSVR drsvr_stats_runtime_ocw_estimation", "0");
+    option_parser_register(opp, "-drsvr_stats_runtime_occlusionStats", OPT_INT32, &m_L1D_config.occlusionPrintoutFlag, "DRSVR drsvr_stats_runtime_occlusionStats", "0");
+    option_parser_register(opp, "-drsvr_stats_runtime_fclDetails", OPT_INT32, &drsvr_stats_runtime_fclDetails, "DRSVR drsvr_stats_runtime_fclDetails", "0");
 
 
     //option_parser_register(opp, "-drsvr_stats_default_interconnect", OPT_INT32, &drsvr_stats_default_interconnect, "DRSVR drsvr_stats_default_interconnect", "0");
@@ -569,6 +572,7 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
 ///ADDED BEGIN
 
 
+
     // DRSVR initialize smObj Vector
     this->init_smObjVector();
     dlcFile = fopen("dlcFile.drsvr","w");
@@ -754,6 +758,9 @@ void gpgpu_sim::init_smObjVector(){
 
     for (unsigned i=0; i<numberOfShaders; i++){
        DRSVR *smObj = new DRSVR(i);
+       if (m_config.m_shader_config.drsvr_stats_runtime_fclDetails == 1){
+           smObj->enableFCLDebug();
+       }
        smObjVector.push_back(smObj);
     }
 
@@ -839,6 +846,8 @@ void gpgpu_sim::drsvr_printHistogramStats(){
 
     if (FCL){
         this->drsvr_printHistogramSingle("FCL");
+        printf("\n\n");
+        this->drsvr_printHistogramSingle("H/L Ratio");
         printf("\n\n");
     }
 

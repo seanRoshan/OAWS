@@ -550,7 +550,6 @@ void mshr_table::update_oaws_memoryOcclusion(bool print, unsigned in_warpid, new
             printf(" %llu ;\n", memoryOcclusion);
             this->print2();
         }
-        printf("DRSVR OK HERE 2!\n");
     }
 
 
@@ -897,27 +896,14 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
     bool mshr_hit = m_mshrs.probe(block_addr);
     bool mshr_avail = !m_mshrs.full(block_addr);
 
+
     bool DRSVRdebug = false;
 
 
-    /* DRSVR
-    if (!mshr_avail){
-
-
-        printf("######################################################################\n");
-        printf("MSHR N! TIME: %u AVAILABLE: %u\n",time, m_mshrs.get_available_count());
-        m_mshrs.print2();
-        printf("\n######################################################################\n");
-
-    }
-    else {
-        printf("######################################################################\n");
-        printf("MSHR Y! TIME: %u AVAILABLE: %u\n",time, m_mshrs.get_available_count());
-        m_mshrs.print2();
-        printf("\n######################################################################\n");
+    if (smObj){
+        DRSVRdebug = (this->m_config.occlusionPrintoutFlag == 1 ) ? true : false ;
     }
 
-    */
 
     if ( mshr_hit && mshr_avail ) {
 
@@ -925,10 +911,13 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
         if (found!=std::string::npos){
             if (m_mshrs.isAlreadyOccluded(mf->get_wid(), addr, block_addr)){
                 m_mshrs.resetOcclusionFlag();
-                printf("DRSVR 1 MSHR HIT:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ;\n", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str() );
-                mf->get_inst().print_insn2();
-                printf("\n");
-                printf("Occlusion Solved!\n");
+                if (DRSVRdebug){
+                    printf("DRSVR 1 MSHR HIT:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ;\n", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str() );
+                    mf->get_inst().print_insn2();
+                    printf("\n");
+                    printf("Occlusion Solved!\n");
+                }
+
             }
         }
 
@@ -946,10 +935,12 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
         if (found!=std::string::npos){
             if (m_mshrs.isAlreadyOccluded(mf->get_wid(), addr, block_addr)){
                 m_mshrs.resetOcclusionFlag();
-                printf("DRSVR 2 MSHR NOT HIT:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ;\n", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str() );
-                mf->get_inst().print_insn2();
-                printf("\n");
-                printf("Occlusion Solved!\n");
+                if (DRSVRdebug){
+                    printf("DRSVR 2 MSHR NOT HIT:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ;\n", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str() );
+                    mf->get_inst().print_insn2();
+                    printf("\n");
+                    printf("Occlusion Solved!\n");
+                }
             }
         }
 
@@ -978,17 +969,22 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
         if (found!=std::string::npos){
 
             if (!m_mshrs.isAlreadyOccluded(mf->get_wid(), addr, block_addr)){
-                printf("DRSVR MSHR OCCLUSION:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; name:%s ; warp_id:%u ; mask:%s ; Occlusion:", mf->get_sid(), mf->get_pc(), addr, block_addr, m_name.c_str(), mf->get_wid(), mf->get_access_warp_mask().to_string().c_str() );
-                m_mshrs.update_oaws_memoryOcclusion(true, mf->get_wid(), addr, block_addr);
-                //mf->get_inst().print_insn2();
-                printf("\n");
 
+                if (DRSVRdebug){
+                    printf("DRSVR MSHR OCCLUSION:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; name:%s ; warp_id:%u ; mask:%s ; Occlusion:"
+                            , mf->get_sid(), mf->get_pc(), addr, block_addr, m_name.c_str(), mf->get_wid(), mf->get_access_warp_mask().to_string().c_str() );
+                    mf->get_inst().print_insn2();
+                    printf("\n");
+                    this->miss_queue_print();
+                }
+
+                m_mshrs.update_oaws_memoryOcclusion(DRSVRdebug, mf->get_wid(), addr, block_addr);
 
                 assert(smObj);
-                smObj->update_histogram(mf->get_wid(),"OCCLUSION",1);
-                //printf("DRSVR update after histogram!\n");
 
-                this->miss_queue_print();
+                smObj->update_histogram(mf->get_wid(),"OCCLUSION",1);
+
+
             }
 
 
@@ -996,11 +992,12 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
 
         else {
             unsigned replayCount = m_mshrs.occlusionReplayed();
-            printf("DRSVR MSHR OCCLUSION REPLAY:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ; Replay:%u", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str(), replayCount );
-            mf->get_inst().print_insn2();
-            printf("\n");
+            if (DRSVRdebug){
+                printf("DRSVR MSHR OCCLUSION REPLAY:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ; Replay:%u", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str(), replayCount );
+                mf->get_inst().print_insn2();
+                printf("\n");
+            }
         }
-
     }
 
 

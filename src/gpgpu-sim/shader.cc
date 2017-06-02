@@ -1020,14 +1020,16 @@ void scheduler_unit::warpThrottling(std::vector< T > &input_list, unsigned OCW_V
         if (globalSpace){
             if ( (input_list.at(i)->ibuffer_empty()) || (input_list.at(i)->waiting()) || (input_list.at(i)->done_exit())  || (!valid) || (scoreBoard_Collision) ) {
 
-                printf("WARP:%u DRSVR OCW THROTTLED CAN NOT BE RUN! %u ; %u ; %u ; %u ; %u ;\n"
-                        ,drsvr_warp_id
-                        ,input_list.at(i)->ibuffer_empty()
-                        ,input_list.at(i)->waiting()
-                        ,input_list.at(i)->done_exit()
-                        ,(!valid)
-                        ,scoreBoard_Collision
-                );
+                if (debugMode){
+                    printf("WARP:%u DRSVR OCW THROTTLED CAN NOT BE RUN! %u ; %u ; %u ; %u ; %u ;\n"
+                            ,drsvr_warp_id
+                            ,input_list.at(i)->ibuffer_empty()
+                            ,input_list.at(i)->waiting()
+                            ,input_list.at(i)->done_exit()
+                            ,(!valid)
+                            ,scoreBoard_Collision
+                    );
+                }
 
                 input_list.at(i)->resetOCWLocalityStatus();
                 input_list.at(i)->set_gprio(0);
@@ -1044,15 +1046,17 @@ void scheduler_unit::warpThrottling(std::vector< T > &input_list, unsigned OCW_V
                     }
                 }
                 else {
-                    printf("WARP:%u DRSVR OCW THROTTLED! THRASHING WARP %u ; %u ; %u ; %u ; %u ; %u;\n"
-                            ,drsvr_warp_id
-                            ,input_list.at(i)->ibuffer_empty()
-                            ,input_list.at(i)->waiting()
-                            ,input_list.at(i)->done_exit()
-                            ,(!valid)
-                            ,scoreBoard_Collision
-                            ,adjusted_OCW_value
-                    );
+                    if (debugMode){
+                        printf("WARP:%u DRSVR OCW THROTTLED! THRASHING WARP %u ; %u ; %u ; %u ; %u ; %u;\n"
+                                ,drsvr_warp_id
+                                ,input_list.at(i)->ibuffer_empty()
+                                ,input_list.at(i)->waiting()
+                                ,input_list.at(i)->done_exit()
+                                ,(!valid)
+                                ,scoreBoard_Collision
+                                ,adjusted_OCW_value
+                        );
+                    }
                     input_list.at(i)->resetOCWLocalityStatus();
                     input_list.at(i)->set_gprio(global_gtoprio);
                     global_gtoprio++;
@@ -1159,34 +1163,6 @@ void scheduler_unit::order_by_priority( bool isOAWS,
         unsigned j = 0;  // TOTAL WARPS
         unsigned o = 0;  // APPROVED ONES
 
-        /*
-        if ( (result_list.size()>0) && (result_list.at(0)->get_sm_id() == 9 )) {
-            printf("#############################################################################;\n");
-            printf("\n-----------------------------------------------\nDRSVR WARP ORDER BEFORE: \n");
-
-
-
-            for (unsigned i=0; i<temp.size(); i++) {
-                if ( temp.at(i)->get_dynamic_warp_id() == 4294967295) {
-                    continue;
-                }
-                j++;
-
-                //shd_warp_t *test;
-                //test->get_warp_id()
-                //test->oaws_approved();
-                //test->get_sm_id();
-
-                printf("%u-%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_warp_id(), temp.at(i)->get_dynamic_warp_id(), temp.at(i)->get_pc(), temp.at(i)->get_sm_id() , temp.at(i)->oaws_approved());
-
-                if (temp.at(i)->oaws_approved()){
-                    o++;
-                }
-            }
-            printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j , o);
-            j=0;
-            o=0;
-        }*/
 
         if (isOAWS == true) {
 
@@ -1276,6 +1252,10 @@ void scheduler_unit::order_by_priority( bool isOAWS,
 
 void scheduler_unit::cycle()
 {
+
+    bool OAWS_EN = (m_shader->m_config->drsvr_stats_runtime_oaws== 1 ) ? true : false ;
+    bool debugMode = DRSVRdebug || OAWS_EN;
+
     assert(smObjLoaded);
 
     SCHED_DPRINTF( "scheduler_unit::cycle()\n" );
@@ -1311,10 +1291,6 @@ void scheduler_unit::cycle()
 
         while( !warp(warp_id).waiting() && !warp(warp_id).ibuffer_empty() && (checked < max_issue) && (checked <= issued) && (issued < max_issue) ) {
 
-
-
-
-
             // Shahriyar NOTE: warp_inst_t is instruction class
             const warp_inst_t *pI = warp(warp_id).ibuffer_next_inst();
             bool valid = warp(warp_id).ibuffer_next_valid();
@@ -1330,21 +1306,23 @@ void scheduler_unit::cycle()
 
 
             if ( ((*pI).space.is_global()) && ((*pI).op==LOAD_OP) ){
-                printf("DRSVR OAWS WARP READY: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Miss-On-Flight:%u ; Available MSHR:%u; OCW:%u ; Space:%u ; Valid:%u ; PC:%u ; pI->PC:%u ;\n"
-                        ,(*iter)->get_warp_id()
-                        , (*iter)->get_sm_id()
-                        , (*iter)->get_pc()
-                        , (*pI).op
-                        , (smObj)->get_missOnFlight()
-                        , (smObj)->get_availableMSHR()
-                        , (smObj)->get_OCW_value()
-                        , (*pI).space.get_type()
-                        , valid
-                        , pc
-                        , pI->pc
-                );
-            }
 
+                if (debugMode){
+                    printf("DRSVR OAWS WARP READY: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Miss-On-Flight:%u ; Available MSHR:%u; OCW:%u ; Space:%u ; Valid:%u ; PC:%u ; pI->PC:%u ;\n"
+                            ,(*iter)->get_warp_id()
+                            , (*iter)->get_sm_id()
+                            , (*iter)->get_pc()
+                            , (*pI).op
+                            , (smObj)->get_missOnFlight()
+                            , (smObj)->get_availableMSHR()
+                            , (smObj)->get_OCW_value()
+                            , (*pI).space.get_type()
+                            , valid
+                            , pc
+                            , pI->pc
+                    );
+                }
+            }
 
             SCHED_DPRINTF( "Warp (warp_id %u, dynamic_warp_id %u) has valid instruction (%s)\n",
                            (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id(),
@@ -1382,7 +1360,7 @@ void scheduler_unit::cycle()
 
                                 assert((*pI).space.get_type()==global_space);
 
-                                if (true /*DRSVRdebug*/) {
+                                if (debugMode){
                                     printf("DRSVR OAWS WARP BLOCKED BY OAWS: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Miss-On-Flight:%u ; Available MSHR:%u; OCW:%u ; Space:%u\n"
                                             ,(*iter)->get_warp_id()
                                             , (*iter)->get_sm_id()
@@ -1395,6 +1373,7 @@ void scheduler_unit::cycle()
                                     );
                                     smObj->print_mshr_info();
                                 }
+
                                 checked++;
                                 continue;
 
@@ -1408,7 +1387,8 @@ void scheduler_unit::cycle()
 
                                 m_shader->issue_warp(*m_mem_out, pI, active_mask, warp_id);
 
-                                if (true/*DRSVRdebug*/) {
+
+                                if (debugMode) {
                                     printf("DRSVR OAWS WARP ISSUED: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Space: %u\n",(*iter)->get_warp_id(), (*iter)->get_sm_id(), (*iter)->get_pc(), (*pI).op, (*pI).space );
                                 }
 
@@ -1427,31 +1407,37 @@ void scheduler_unit::cycle()
                                 issued++;
                                 issued_inst=true;
                                 warp_inst_issued = true;
-                            } else if ( (pI->op == SFU_OP) || (pI->op == ALU_SFU_OP) ) {
+                            }
+                            else if ( (pI->op == SFU_OP) || (pI->op == ALU_SFU_OP) ) {
                                 if( sfu_pipe_avail ) {
                                     m_shader->issue_warp(*m_sfu_out,pI,active_mask,warp_id);
                                     issued++;
                                     issued_inst=true;
                                     warp_inst_issued = true;
                                 }
-                            }                         }
-                    } else {
+                            }
+                        }
+                    }
+                    else {
 
-                        if ( ((*pI).space.is_global()) && ((*pI).op==LOAD_OP) ){
-                            printf("DRSVR OAWS WARP NOT PASSED SCORE BOARD!: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Miss-On-Flight:%u ; Available MSHR:%u; OCW:%u ; Space:%u ; Valid:%u ; PC:%u ; pI->PC:%u ;\n"
-                                    ,(*iter)->get_warp_id()
-                                    , (*iter)->get_sm_id()
-                                    , (*iter)->get_pc()
-                                    , (*pI).op
-                                    , (smObj)->get_missOnFlight()
-                                    , (smObj)->get_availableMSHR()
-                                    , (smObj)->get_OCW_value()
-                                    , (*pI).space.get_type()
-                                    , valid
-                                    , pc
-                                    , pI->pc
-                            );
 
+                        if (debugMode){
+                            if ( ((*pI).space.is_global()) && ((*pI).op==LOAD_OP) ){
+                                printf("DRSVR OAWS WARP NOT PASSED SCORE BOARD!: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Miss-On-Flight:%u ; Available MSHR:%u; OCW:%u ; Space:%u ; Valid:%u ; PC:%u ; pI->PC:%u ;\n"
+                                        ,(*iter)->get_warp_id()
+                                        , (*iter)->get_sm_id()
+                                        , (*iter)->get_pc()
+                                        , (*pI).op
+                                        , (smObj)->get_missOnFlight()
+                                        , (smObj)->get_availableMSHR()
+                                        , (smObj)->get_OCW_value()
+                                        , (*pI).space.get_type()
+                                        , valid
+                                        , pc
+                                        , pI->pc
+                                );
+
+                            }
                         }
 
                         SCHED_DPRINTF( "Warp (warp_id %u, dynamic_warp_id %u) fails scoreboard\n",
@@ -1523,100 +1509,55 @@ bool scheduler_unit::sort_warps_by_oldest_dynamic_id(shd_warp_t* lhs, shd_warp_t
 
     if (rhs && lhs) {
         if ( lhs->done_exit() || lhs->waiting() ) {
-
-            /*
-            if (lhs->done_exit()) {
-                printf("DRSVR lhs->done_exit() warp id: %u ; %d \n", lhs->get_warp_id(), lhs->done_exit());
-            }
-            else {
-                printf("DRSVR lhs->waiting() warp id: %u ; %d \n", lhs->get_warp_id(), lhs->waiting());
-            }
-             */
-
             return false;
         } else if ( rhs->done_exit() || rhs->waiting() ) {
             return true;
         } else {
-            //printf("DRSVR lhs->get_dynamic_warp_id(): %u  rhs->get_dynamic_warp_id(): %u  \n",
-            //       lhs->get_warp_id(),
-            //       lhs->done_exit());
-
             return lhs->get_dynamic_warp_id() < rhs->get_dynamic_warp_id();
         }
     } else {
-        //printf("DRSVR: lhs: %d , rhs: %d \n");
         return lhs < rhs;
     }
 }
 
 
 // DRSVR OAWS
-bool scheduler_unit::sort_warps_by_oldest_dynamic_id_oaws(shd_warp_t* lhs, shd_warp_t* rhs)
+bool scheduler_unit::sort_warps_by_oldest_dynamic_id_oaws2(shd_warp_t* lhs, shd_warp_t* rhs)
 {
-
     if (rhs && lhs) {
+
         if ( lhs->done_exit() || lhs->waiting() ) {
-
-            /*
-            if (lhs->done_exit()) {
-                printf("DRSVR lhs->done_exit() warp id: %u ; %d \n", lhs->get_warp_id(), lhs->done_exit());
-            }
-            else {
-                printf("DRSVR lhs->waiting() warp id: %u ; %d \n", lhs->get_warp_id(), lhs->waiting());
-            }
-             */
-
             return false;
         } else if ( rhs->done_exit() || rhs->waiting() ) {
             return true;
         } else {
-            //printf("DRSVR lhs->get_dynamic_warp_id(): %u  rhs->get_dynamic_warp_id(): %u  \n",
-            //       lhs->get_warp_id(),
-            //       lhs->done_exit());
-
             return lhs->get_dynamic_warp_id() < rhs->get_dynamic_warp_id();
         }
-    } else {
-        //printf("DRSVR: lhs: %d , rhs: %d \n");
+    }
+    else {
         return lhs < rhs;
     }
 }
 
 
 // DRSVR OAWS BACKUP
-bool scheduler_unit::sort_warps_by_oldest_dynamic_id_oaws2(shd_warp_t* lhs, shd_warp_t* rhs)
+bool scheduler_unit::sort_warps_by_oldest_dynamic_id_oaws(shd_warp_t* lhs, shd_warp_t* rhs)
 {
 
     //smObj->print_dlc_table();
     if (rhs && lhs) {
-
         if ((lhs->oaws_approved()==false) && (rhs->oaws_approved()==false)) {
-            return lhs < rhs;
+            return lhs->get_dynamic_warp_id() < rhs->get_dynamic_warp_id();
         }
-
         if ( lhs->done_exit() || lhs->waiting() || (lhs->oaws_approved()==false)) {
-
-            /*
-            if (lhs->done_exit()) {
-                printf("DRSVR lhs->done_exit() warp id: %u ; %d \n", lhs->get_warp_id(), lhs->done_exit());
-            }
-            else {
-                printf("DRSVR lhs->waiting() warp id: %u ; %d \n", lhs->get_warp_id(), lhs->waiting());
-            }
-             */
-
             return false;
         } else if ( rhs->done_exit() || rhs->waiting() || (rhs->oaws_approved()==false) ) {
             return true;
         } else {
-            //printf("DRSVR lhs->get_dynamic_warp_id(): %u  rhs->get_dynamic_warp_id(): %u  \n",
-            //       lhs->get_warp_id(),
-            //       lhs->done_exit());
-
             return lhs->get_dynamic_warp_id() < rhs->get_dynamic_warp_id();
         }
-    } else {
-        //printf("DRSVR: lhs: %d , rhs: %d \n");
+    }
+    else {
         return lhs < rhs;
     }
 }
@@ -1646,15 +1587,13 @@ void gto_scheduler::order_warps()
 
 void oaws_scheduler::order_warps()
 {
-    //printf("DRSVR Schedular OAWS!\n");
-    order_by_priority(
-                       true,
+    order_by_priority( true,
                        m_next_cycle_prioritized_warps,
                        m_supervised_warps,
                        m_last_supervised_issued,
                        m_supervised_warps.size(),
                        ORDERING_GREEDY_THEN_PRIORITY_FUNC,
-                       scheduler_unit::sort_warps_by_oldest_dynamic_id_oaws );
+                       scheduler_unit::sort_warps_by_oldest_dynamic_id_oaws2 );
 
 }
 
@@ -1999,19 +1938,13 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
                                  enum cache_request_status status )
 {
 
-
-
-    if (DRSVRdebug){
-        printf("DRSVR process_cache_access! \n");
-        printf("Memory Request:> Warp ID/SM ID/PC:[%u,%u,%u]\t",mf->get_wid(), mf->get_sid(), mf->get_pc());
-    }
-
-
     if (smObj){
-        if (DRSVRdebug){
+
+
+        /*if (DRSVRdebug){
             mf->print2();
             inst.accessq_print();
-        }
+        }*/
 
         address_type  blockAddress = m_config->m_L1D_config.block_addr(mf->get_addr());
         unsigned set_index = m_config->m_L1D_config.set_index(blockAddress);
@@ -2036,27 +1969,32 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
             smObj->update_dlc_table(mf->get_wid(), mf->get_sid(), PC ,INST ,ACC ,SET,isLoad);
             smObj->updateOCW(FCLstatus, SET, ACC);
 
-            bool debugMode = DRSVRdebug ;
+            bool debugMode = DRSVRdebug || m_config->drsvr_stats_runtime_ocw_estimation;
             //debugMode = debugMode || (mf->get_sid()==9) ;
 
             //bool debugMode = true;
 
             smObj->set_OCW_value(smObj->getOCW(debugMode));
 
-            if (debugMode){
-                printf("DRSVR FCL UNIT DLCLOCKED! [%u;%u;%u] OCW:%u\t",mf->get_wid() , mf->get_sid(), mf->get_pc(), smObj->get_OCW_value());
+            if (debugMode) {
+                printf("DRSVR FCL UNIT DLCLOCKED! [%u;%u;%u] OCW:%u\t", mf->get_wid(), mf->get_sid(), mf->get_pc(),
+                       smObj->get_OCW_value());
+            }
+
+            smObj->update_histogram_double(mf->get_wid(),"H/L Ratio",smObj->global_FCL_obj->getRatio());
+
                 if (FCLstatus){
-                    printf("PC:%u ; INST:%u ; ACC:%u ; SET:%u; FULLY CACHED!\n", PC ,INST ,ACC ,SET );
+                    if (debugMode){
+                        printf("PC:%u ; INST:%u ; ACC:%u ; SET:%u; FULLY CACHED!\n", PC ,INST ,ACC ,SET );
+                    }
                     smObj->update_histogram(mf->get_wid(),"FCL",1);
                 }
                 else {
-                    printf("PC:%u ; INST:%u ; ACC:%u ; SET:%u; NOT FULLY CACHED!\n", PC ,INST ,ACC ,SET );
+                    if (debugMode){
+                        printf("PC:%u ; INST:%u ; ACC:%u ; SET:%u; NOT FULLY CACHED!\n", PC ,INST ,ACC ,SET );
+                    }
                     smObj->update_histogram(mf->get_wid(),"FCL",0);
                 }
-                //smObj->print_dlc_table();
-            }
-
-
         }
 
 
@@ -2386,7 +2324,7 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
                       unsigned sid,
                       unsigned tpc, DRSVR *drsvrObj) : pipelined_simd_unit(NULL,config,3,core), m_next_wb(config)
 {
-    printf("DRSVR SM:%u ldst Constructor!\n", sid);
+    //printf("DRSVR SM:%u ldst Constructor!\n", sid);
     smObj = drsvrObj;
     smObjLoaded = true;
 

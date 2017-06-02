@@ -1416,6 +1416,8 @@ struct shader_core_config : public core_config
     unsigned drsvr_stats_runtime_ocw_throttling;
     unsigned drsvr_stats_runtime_oaws;
     unsigned drsvr_stats_runtime_ocw_estimation;
+    unsigned drsvr_stats_runtime_occlusionStats;
+    unsigned drsvr_stats_runtime_fclDetails;
 
     char* pipeline_widths_string;
     int pipe_widths[N_PIPELINE_STAGES];
