@@ -1404,6 +1404,19 @@ struct shader_core_config : public core_config
     unsigned max_barriers_per_cta;
     char * gpgpu_scheduler_string;
 
+
+// DRSVR STATS
+    unsigned gpgpu_drsvr_stats_dlc;
+    unsigned gpgpu_drsvr_stats_fcl;
+    unsigned gpgpu_drsvr_stats_occlusion;
+    unsigned gpgpu_drsvr_stats_replay_hit;
+    unsigned gpgpu_drsvr_stats_replay_miss;
+
+
+    unsigned drsvr_stats_runtime_ocw_throttling;
+    unsigned drsvr_stats_runtime_oaws;
+    unsigned drsvr_stats_runtime_ocw_estimation;
+
     char* pipeline_widths_string;
     int pipe_widths[N_PIPELINE_STAGES];
 

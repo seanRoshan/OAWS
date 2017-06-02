@@ -397,6 +397,7 @@ public:
 
    void drsvr_printHistogramStats();
    void drsvr_printHistogramSingle(std::string histogramName);
+   void drsvr_printHistogramSingle_tofile(std::string histogramName);
 
 
    gpgpu_sim( const gpgpu_sim_config &config);

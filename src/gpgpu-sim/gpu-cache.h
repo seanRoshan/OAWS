@@ -418,7 +418,6 @@ public:
         smObjLoaded = true;
         smObj->initialize_mshr_OAWS(this->get_available_count(),0);
 
-
         memoryOcclusion = 0;
         alreadyOccluded = false;
     }
@@ -495,6 +494,10 @@ public:
 
     unsigned occlusionReplayed(){
         occlusionReplay++;
+        return occlusionReplay;
+    }
+
+    unsigned getReplayCount(){
         return occlusionReplay;
     }
 

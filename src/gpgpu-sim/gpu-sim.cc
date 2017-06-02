@@ -366,6 +366,22 @@ void shader_core_config::reg_options(class OptionParser * opp)
                                 "For complete list of prioritization values see shader.h enum scheduler_prioritization_type"
                                 "Default: gto",
                                  "gto");
+
+    // DRSVR STATS
+    option_parser_register(opp, "-drsvr_stats_dlc", OPT_INT32, &gpgpu_drsvr_stats_dlc, "DRSVR STATS DLC", "0");
+    option_parser_register(opp, "-drsvr_stats_occlusion", OPT_INT32, &gpgpu_drsvr_stats_occlusion, "DRSVR STATS OCCLUSION", "0");
+    option_parser_register(opp, "-drsvr_stats_fcl", OPT_INT32, &gpgpu_drsvr_stats_fcl, "DRSVR STATS FCL", "0");
+    option_parser_register(opp, "-drsvr_stats_REPLAY_MISS", OPT_INT32, &gpgpu_drsvr_stats_replay_miss, "DRSVR STATS REPLAY_MISS", "0");
+    option_parser_register(opp, "-drsvr_stats_REPLAY_HIT", OPT_INT32, &gpgpu_drsvr_stats_replay_hit, "DRSVR STATS REPLAY_HIT", "0");
+
+    option_parser_register(opp, "-drsvr_stats_runtime_ocw_throttling", OPT_INT32, &drsvr_stats_runtime_ocw_throttling, "DRSVR drsvr_stats_runtime_ocw_throttling", "0");
+    option_parser_register(opp, "-drsvr_stats_runtime_oaws", OPT_INT32, &drsvr_stats_runtime_oaws, "DRSVR drsvr_stats_runtime_oaws", "0");
+    option_parser_register(opp, "-drsvr_stats_runtime_ocw_estimation", OPT_INT32, &drsvr_stats_runtime_ocw_estimation, "DRSVR drsvr_stats_runtime_ocw_estimation", "0");
+
+
+    //option_parser_register(opp, "-drsvr_stats_default_interconnect", OPT_INT32, &drsvr_stats_default_interconnect, "DRSVR drsvr_stats_default_interconnect", "0");
+    //option_parser_register(opp, "-drsvr_stats_default_l2cache", OPT_INT32, &drsvr_stats_default_interconnect, "DRSVR drsvr_stats_default_interconnect", "0");
+
 }
 
 void gpgpu_sim_config::reg_options(option_parser_t opp)
@@ -374,19 +390,19 @@ void gpgpu_sim_config::reg_options(option_parser_t opp)
     m_shader_config.reg_options(opp);
     m_memory_config.reg_options(opp);
     power_config::reg_options(opp);
-   option_parser_register(opp, "-gpgpu_max_cycle", OPT_INT32, &gpu_max_cycle_opt, 
+   option_parser_register(opp, "-gpgpu_max_cycle", OPT_INT32, &gpu_max_cycle_opt,
                "terminates gpu simulation early (0 = no limit)",
                "0");
-   option_parser_register(opp, "-gpgpu_max_insn", OPT_INT32, &gpu_max_insn_opt, 
+   option_parser_register(opp, "-gpgpu_max_insn", OPT_INT32, &gpu_max_insn_opt,
                "terminates gpu simulation early (0 = no limit)",
                "0");
-   option_parser_register(opp, "-gpgpu_max_cta", OPT_INT32, &gpu_max_cta_opt, 
+   option_parser_register(opp, "-gpgpu_max_cta", OPT_INT32, &gpu_max_cta_opt,
                "terminates gpu simulation early (0 = no limit)",
                "0");
-   option_parser_register(opp, "-gpgpu_runtime_stat", OPT_CSTR, &gpgpu_runtime_stat, 
+   option_parser_register(opp, "-gpgpu_runtime_stat", OPT_CSTR, &gpgpu_runtime_stat,
                   "display runtime statistics such as dram utilization {<freq>:<flag>}",
                   "10000:0");
-   option_parser_register(opp, "-liveness_message_freq", OPT_INT64, &liveness_message_freq, 
+   option_parser_register(opp, "-liveness_message_freq", OPT_INT64, &liveness_message_freq,
                "Minimum number of seconds between simulation liveness messages (0 = always print)",
                "1");
    option_parser_register(opp, "-gpgpu_flush_l1_cache", OPT_BOOL, &gpgpu_flush_l1_cache,
@@ -396,45 +412,45 @@ void gpgpu_sim_config::reg_options(option_parser_t opp)
                    "Flush L2 cache at the end of each kernel call",
                    "0");
 
-   option_parser_register(opp, "-gpgpu_deadlock_detect", OPT_BOOL, &gpu_deadlock_detect, 
-                "Stop the simulation at deadlock (1=on (default), 0=off)", 
+   option_parser_register(opp, "-gpgpu_deadlock_detect", OPT_BOOL, &gpu_deadlock_detect,
+                "Stop the simulation at deadlock (1=on (default), 0=off)",
                 "1");
-   option_parser_register(opp, "-gpgpu_ptx_instruction_classification", OPT_INT32, 
-               &gpgpu_ptx_instruction_classification, 
-               "if enabled will classify ptx instruction types per kernel (Max 255 kernels now)", 
+   option_parser_register(opp, "-gpgpu_ptx_instruction_classification", OPT_INT32,
+               &gpgpu_ptx_instruction_classification,
+               "if enabled will classify ptx instruction types per kernel (Max 255 kernels now)",
                "0");
-   option_parser_register(opp, "-gpgpu_ptx_sim_mode", OPT_INT32, &g_ptx_sim_mode, 
-               "Select between Performance (default) or Functional simulation (1)", 
+   option_parser_register(opp, "-gpgpu_ptx_sim_mode", OPT_INT32, &g_ptx_sim_mode,
+               "Select between Performance (default) or Functional simulation (1)",
                "0");
-   option_parser_register(opp, "-gpgpu_clock_domains", OPT_CSTR, &gpgpu_clock_domains, 
+   option_parser_register(opp, "-gpgpu_clock_domains", OPT_CSTR, &gpgpu_clock_domains,
                   "Clock Domain Frequencies in MhZ {<Core Clock>:<ICNT Clock>:<L2 Clock>:<DRAM Clock>}",
                   "500.0:2000.0:2000.0:2000.0");
    option_parser_register(opp, "-gpgpu_max_concurrent_kernel", OPT_INT32, &max_concurrent_kernel,
                           "maximum kernels that can run concurrently on GPU", "8" );
-   option_parser_register(opp, "-gpgpu_cflog_interval", OPT_INT32, &gpgpu_cflog_interval, 
-               "Interval between each snapshot in control flow logger", 
+   option_parser_register(opp, "-gpgpu_cflog_interval", OPT_INT32, &gpgpu_cflog_interval,
+               "Interval between each snapshot in control flow logger",
                "0");
    option_parser_register(opp, "-visualizer_enabled", OPT_BOOL,
                           &g_visualizer_enabled, "Turn on visualizer output (1=On, 0=Off)",
                           "1");
-   option_parser_register(opp, "-visualizer_outputfile", OPT_CSTR, 
+   option_parser_register(opp, "-visualizer_outputfile", OPT_CSTR,
                           &g_visualizer_filename, "Specifies the output log file for visualizer",
                           NULL);
    option_parser_register(opp, "-visualizer_zlevel", OPT_INT32,
                           &g_visualizer_zlevel, "Compression level of the visualizer output log (0=no comp, 9=highest)",
                           "6");
-    option_parser_register(opp, "-trace_enabled", OPT_BOOL, 
+    option_parser_register(opp, "-trace_enabled", OPT_BOOL,
                           &Trace::enabled, "Turn on traces",
                           "0");
-    option_parser_register(opp, "-trace_components", OPT_CSTR, 
+    option_parser_register(opp, "-trace_components", OPT_CSTR,
                           &Trace::config_str, "comma seperated list of traces to enable. "
                           "Complete list found in trace_streams.tup. "
                           "Default none",
                           "none");
-    option_parser_register(opp, "-trace_sampling_core", OPT_INT32, 
+    option_parser_register(opp, "-trace_sampling_core", OPT_INT32,
                           &Trace::sampling_core, "The core which is printed using CORE_DPRINTF. Default 0",
                           "0");
-    option_parser_register(opp, "-trace_sampling_memory_partition", OPT_INT32, 
+    option_parser_register(opp, "-trace_sampling_memory_partition", OPT_INT32,
                           &Trace::sampling_memory_partition, "The memory partition which is printed using MEMPART_DPRINTF. Default -1 (i.e. all)",
                           "-1");
    ptx_file_line_stats_options(opp);
@@ -450,7 +466,7 @@ void increment_x_then_y_then_z( dim3 &i, const dim3 &bound)
       i.y++;
       if ( i.y >= bound.y ) {
          i.y = 0;
-         if( i.z < bound.z ) 
+         if( i.z < bound.z )
             i.z++;
       }
    }
@@ -461,7 +477,7 @@ void gpgpu_sim::launch( kernel_info_t *kinfo )
    unsigned cta_size = kinfo->threads_per_cta();
    if ( cta_size > m_shader_config->n_thread_per_shader ) {
       printf("Execution error: Shader kernel CTA (block) size is too large for microarch config.\n");
-      printf("                 CTA size (x*y*z) = %u, max supported = %u\n", cta_size, 
+      printf("                 CTA size (x*y*z) = %u, max supported = %u\n", cta_size,
              m_shader_config->n_thread_per_shader );
       printf("                 => either change -gpgpu_shader argument in gpgpusim.config file or\n");
       printf("                 modify the CUDA source to decrease the kernel block size.\n");
@@ -480,20 +496,20 @@ void gpgpu_sim::launch( kernel_info_t *kinfo )
 bool gpgpu_sim::can_start_kernel()
 {
    for(unsigned n=0; n < m_running_kernels.size(); n++ ) {
-       if( (NULL==m_running_kernels[n]) || m_running_kernels[n]->done() ) 
+       if( (NULL==m_running_kernels[n]) || m_running_kernels[n]->done() )
            return true;
    }
    return false;
 }
 
 bool gpgpu_sim::get_more_cta_left() const
-{ 
+{
    if (m_config.gpu_max_cta_opt != 0) {
       if( m_total_cta_launched >= m_config.gpu_max_cta_opt )
           return false;
    }
    for(unsigned n=0; n < m_running_kernels.size(); n++ ) {
-       if( m_running_kernels[n] && !m_running_kernels[n]->no_more_ctas_to_run() ) 
+       if( m_running_kernels[n] && !m_running_kernels[n]->no_more_ctas_to_run() )
            return true;
    }
    return false;
@@ -505,11 +521,11 @@ kernel_info_t *gpgpu_sim::select_kernel()
         unsigned idx = (n+m_last_issued_kernel+1)%m_config.max_concurrent_kernel;
         if( m_running_kernels[idx] && !m_running_kernels[idx]->no_more_ctas_to_run() ) {
             m_last_issued_kernel=idx;
-            // record this kernel for stat print if it is the first time this kernel is selected for execution  
-            unsigned launch_uid = m_running_kernels[idx]->get_uid(); 
+            // record this kernel for stat print if it is the first time this kernel is selected for execution
+            unsigned launch_uid = m_running_kernels[idx]->get_uid();
             if (std::find(m_executed_kernel_uids.begin(), m_executed_kernel_uids.end(), launch_uid) == m_executed_kernel_uids.end()) {
-               m_executed_kernel_uids.push_back(launch_uid); 
-               m_executed_kernel_names.push_back(m_running_kernels[idx]->name()); 
+               m_executed_kernel_uids.push_back(launch_uid);
+               m_executed_kernel_names.push_back(m_running_kernels[idx]->name());
             }
 
             return m_running_kernels[idx];
@@ -520,15 +536,15 @@ kernel_info_t *gpgpu_sim::select_kernel()
 
 unsigned gpgpu_sim::finished_kernel()
 {
-    if( m_finished_kernel.empty() ) 
+    if( m_finished_kernel.empty() )
         return 0;
     unsigned result = m_finished_kernel.front();
     m_finished_kernel.pop_front();
     return result;
 }
 
-void gpgpu_sim::set_kernel_done( kernel_info_t *kernel ) 
-{ 
+void gpgpu_sim::set_kernel_done( kernel_info_t *kernel )
+{
     unsigned uid = kernel->get_uid();
     m_finished_kernel.push_back(uid);
     std::vector<kernel_info_t*>::iterator k;
@@ -538,14 +554,14 @@ void gpgpu_sim::set_kernel_done( kernel_info_t *kernel )
             break;
         }
     }
-    assert( k != m_running_kernels.end() ); 
+    assert( k != m_running_kernels.end() );
 }
 
 void set_ptx_warp_size(const struct core_config * warp_size);
 
-gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config ) 
+gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
     : gpgpu_t(config), m_config(config)
-{ 
+{
     m_shader_config = &m_config.m_shader_config;
     m_memory_config = &m_config.m_memory_config;
 
@@ -555,7 +571,6 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
 
     // DRSVR initialize smObj Vector
     this->init_smObjVector();
-
     dlcFile = fopen("dlcFile.drsvr","w");
 
 ///DRSVR ADDED END
@@ -580,7 +595,7 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
 
 
     m_cluster = new simt_core_cluster*[m_shader_config->n_simt_clusters];
-    for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) 
+    for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++)
         m_cluster[i] = new simt_core_cluster(this,i,m_shader_config,m_memory_config,m_shader_stats,m_memory_stats);
 
     m_memory_partition_unit = new memory_partition_unit*[m_memory_config->m_n_mem];
@@ -588,8 +603,8 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
     for (unsigned i=0;i<m_memory_config->m_n_mem;i++) {
         m_memory_partition_unit[i] = new memory_partition_unit(i, m_memory_config, m_memory_stats);
         for (unsigned p = 0; p < m_memory_config->m_n_sub_partition_per_memory_channel; p++) {
-            unsigned submpid = i * m_memory_config->m_n_sub_partition_per_memory_channel + p; 
-            m_memory_sub_partition[submpid] = m_memory_partition_unit[i]->get_sub_partition(p); 
+            unsigned submpid = i * m_memory_config->m_n_sub_partition_per_memory_channel + p;
+            m_memory_sub_partition[submpid] = m_memory_partition_unit[i]->get_sub_partition(p);
         }
     }
 
@@ -648,14 +663,14 @@ enum divergence_support_t gpgpu_sim::simd_model() const
    return m_shader_config->model;
 }
 
-void gpgpu_sim_config::init_clock_domains(void ) 
+void gpgpu_sim_config::init_clock_domains(void )
 {
-   sscanf(gpgpu_clock_domains,"%lf:%lf:%lf:%lf", 
+   sscanf(gpgpu_clock_domains,"%lf:%lf:%lf:%lf",
           &core_freq, &icnt_freq, &l2_freq, &dram_freq);
    core_freq = core_freq MhZ;
    icnt_freq = icnt_freq MhZ;
    l2_freq = l2_freq MhZ;
-   dram_freq = dram_freq MhZ;        
+   dram_freq = dram_freq MhZ;
    core_period = 1/core_freq;
    icnt_period = 1/icnt_freq;
    dram_period = 1/dram_freq;
@@ -674,18 +689,18 @@ void gpgpu_sim::reinit_clock_domains(void)
 
 bool gpgpu_sim::active()
 {
-    if (m_config.gpu_max_cycle_opt && (gpu_tot_sim_cycle + gpu_sim_cycle) >= m_config.gpu_max_cycle_opt) 
+    if (m_config.gpu_max_cycle_opt && (gpu_tot_sim_cycle + gpu_sim_cycle) >= m_config.gpu_max_cycle_opt)
        return false;
-    if (m_config.gpu_max_insn_opt && (gpu_tot_sim_insn + gpu_sim_insn) >= m_config.gpu_max_insn_opt) 
+    if (m_config.gpu_max_insn_opt && (gpu_tot_sim_insn + gpu_sim_insn) >= m_config.gpu_max_insn_opt)
        return false;
     if (m_config.gpu_max_cta_opt && (gpu_tot_issued_cta >= m_config.gpu_max_cta_opt) )
        return false;
-    if (m_config.gpu_deadlock_detect && gpu_deadlock) 
+    if (m_config.gpu_deadlock_detect && gpu_deadlock)
        return false;
-    for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) 
-       if( m_cluster[i]->get_not_completed()>0 ) 
+    for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++)
+       if( m_cluster[i]->get_not_completed()>0 )
            return true;;
-    for (unsigned i=0;i<m_memory_config->m_n_mem;i++) 
+    for (unsigned i=0;i<m_memory_config->m_n_mem;i++)
        if( m_memory_partition_unit[i]->busy()>0 )
            return true;;
     if( icnt_busy() )
@@ -705,7 +720,7 @@ void gpgpu_sim::init()
 
     reinit_clock_domains();
     set_param_gpgpu_num_shaders(m_config.num_shader());
-    for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++) 
+    for (unsigned i=0;i<m_shader_config->n_simt_clusters;i++)
        m_cluster[i]->reinit();
     m_shader_stats->new_grid();
     // initialize the control-flow, memory access, memory latency logger
@@ -747,18 +762,56 @@ void gpgpu_sim::init_smObjVector(){
 
 void gpgpu_sim::drsvr_printDLCStats() {
 
-    printf("-------------------------------DLC DETAILS------------------------------------\n" );
+    bool DLC_EN = (m_config.m_shader_config.gpgpu_drsvr_stats_dlc== 1 ) ? true : false ;
+
+    if (DLC_EN){
+
+        printf("-------------------------------DLC DETAILS------------------------------------\n" );
+
+        unsigned numberOfShaders= m_config.num_shader();
+
+        for (unsigned i=0; i<numberOfShaders; i++){
+            smObjVector.at(i)->print_dlc_table_aggregated();
+        }
+
+        printf("----------------------------END OF DLC DETAILS--------------------------------\n" );
+    }
+
+}
+
+void gpgpu_sim::drsvr_printDLCStats_tofile() {
 
     unsigned numberOfShaders= m_config.num_shader();
 
+    fprintf(dlcFile,"############################################### DLC DETAILS KERNEL ###############################################\n");
+    fprintf(dlcFile, "%s",this->executed_kernel_info_string().c_str());
 
     for (unsigned i=0; i<numberOfShaders; i++){
-        smObjVector.at(i)->print_dlc_table_aggregated();
+        smObjVector.at(i)->printout_dlc_tofile_lastKernel(dlcFile);
+        //smObjVector.at(i)->printout_dlc_tofile_multiKernel(dlcFile);
+        //smObjVector.at(i)->printout_dlc_tofile_singleKernel(dlcFile,this->m_last_issued_kernel);
     }
 
-    printf("----------------------------END OF DLC DETAILS--------------------------------\n" );
-
+    fprintf(dlcFile,"############################################### END OF DLC DETAILS ###############################################\n" );
+    
 }
+
+/*void gpgpu_sim::drsvr_printHistogramSingle_tofile(std::string histogramName){
+
+    unsigned numberOfShaders= m_config.num_shader();
+
+    printf("-------------------------------%s DETAILS------------------------------------\n\n", histogramName.c_str());
+
+    for (unsigned i=0; i<numberOfShaders; i++){
+        //smObjVector.at(i)->print_histogram_global_vector(histogramName);
+        smObjVector.at(i)->print_histogram_global_aggr(histogramName);
+    }
+
+    printf("----------------------------END OF %s DETAILS--------------------------------\n", histogramName.c_str());
+
+
+}*/
+
 
 
 void gpgpu_sim::drsvr_printHistogramSingle(std::string histogramName){
@@ -778,8 +831,10 @@ void gpgpu_sim::drsvr_printHistogramSingle(std::string histogramName){
 
 void gpgpu_sim::drsvr_printHistogramStats(){
 
-    bool FCL = true;
-    bool OCCLUSION = true;
+    bool FCL = (m_config.m_shader_config.gpgpu_drsvr_stats_fcl== 1 ) ? true : false ;
+    bool OCCLUSION = (m_config.m_shader_config.gpgpu_drsvr_stats_occlusion== 1 ) ? true : false ;
+    bool REPLAY_HIT = (m_config.m_shader_config.gpgpu_drsvr_stats_replay_hit== 1 ) ? true : false ;
+    bool REPLAY_MISS = (m_config.m_shader_config.gpgpu_drsvr_stats_replay_miss== 1 ) ? true : false ;
 
 
     if (FCL){
@@ -792,32 +847,17 @@ void gpgpu_sim::drsvr_printHistogramStats(){
         printf("\n\n");
     }
 
-
-
-}
-
-void gpgpu_sim::drsvr_printDLCStats_tofile() {
-
-    unsigned numberOfShaders= m_config.num_shader();
-
-    fprintf(dlcFile,"############################################### DLC DETAILS KERNEL ###############################################\n");
-    fprintf(dlcFile, "%s",this->executed_kernel_info_string().c_str());
-
-    for (unsigned i=0; i<numberOfShaders; i++){
-        smObjVector.at(i)->printout_dlc_tofile_lastKernel(dlcFile);
-        //smObjVector.at(i)->printout_dlc_tofile_multiKernel(dlcFile);
-        //smObjVector.at(i)->printout_dlc_tofile_singleKernel(dlcFile,this->m_last_issued_kernel);
+    if (REPLAY_HIT){
+        this->drsvr_printHistogramSingle("REPLAY_HIT");
     }
 
-    fprintf(dlcFile,"############################################### END OF DLC DETAILS ###############################################\n" );
+    if (REPLAY_MISS){
+        this->drsvr_printHistogramSingle("REPALY_MISS");
+    }
 
 
-    //fclose(dlcFile);
 
-    //smObjVector.at(i).
 }
-
-
 
 void gpgpu_sim::update_stats() {
     m_memory_stats->memlatstat_lat_pw();

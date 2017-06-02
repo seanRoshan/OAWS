@@ -800,9 +800,64 @@ public:
 
     }
 
+    void sort_histogram_byCounter(){
+
+        assert(histogramVector.size() == histogramCounterVector.size());
+
+        if (histogramVector.size()>0){
+            for (unsigned i=0; i<histogramCounterVector.size(); i++){
+                for (unsigned j=0; j<histogramCounterVector.size()-1; j++){
+                    if (histogramCounterVector.at(j)>histogramCounterVector.at(j+1)){
+                        unsigned temp = histogramCounterVector.at(j);
+                        histogramCounterVector.at(j) = histogramCounterVector.at(j+1);
+                        histogramCounterVector.at(j+1) = temp;
+
+                        temp = histogramVector.at(j);
+                        histogramVector.at(j)=histogramVector.at(j+1);
+                        histogramVector.at(j+1)=temp;
+                    }
+                }
+            }
+
+        }
+    }
+
+    void sort_histogram_byName(){
+
+        assert(histogramVector.size() == histogramCounterVector.size());
+
+        if (histogramVector.size()>0){
+            for (unsigned i=0; i<histogramVector.size(); i++){
+                for (unsigned j=0; j<histogramVector.size()-1; j++){
+                    if (histogramVector.at(j)>histogramVector.at(j+1)){
+                        unsigned temp = histogramCounterVector.at(j);
+                        histogramCounterVector.at(j) = histogramCounterVector.at(j+1);
+                        histogramCounterVector.at(j+1) = temp;
+
+                        temp = histogramVector.at(j);
+                        histogramVector.at(j)=histogramVector.at(j+1);
+                        histogramVector.at(j+1)=temp;
+                    }
+                }
+            }
+
+        }
+    }
+
+    bool is_empty(){
+        if (histogramVector.size()>0){
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
     void print_histogram () {
 
         assert(histogramCounterVector.size() == histogramVector.size());
+
+        this->sort_histogram_byName();
 
         if (histogramVector.size()>0) {
 
@@ -1282,7 +1337,7 @@ private:
     unsigned CNT;
     unsigned Delta;
 
-    const unsigned  CMAX = 127;
+    const unsigned  CMAX = 255;
     const unsigned  WMAX = 48 ;
 
 
@@ -1322,7 +1377,7 @@ private:
             if (FCL){
                 CNT++;
                 if ( (CNT>=CMAX) && (OCW<WMAX)){
-                    OCW++;
+                    OCW = OCW++;
                     CNT=0;
                 }
             }
@@ -1330,7 +1385,7 @@ private:
                 if (CNT > Delta) {
                     CNT -= Delta;
                 } else {
-                    CNT = 127;
+                    CNT = 255;
                     if (OCW > 2) {
                         OCW--;
                     }
@@ -1350,7 +1405,7 @@ public:
     OCW_LOGIC(){
         Div = false;
         FCL = false;
-        CNT = 0;
+        CNT = 127;
         Acc = 0;
         OCW = 2;
     }
@@ -1814,7 +1869,6 @@ public:
 
         this->initialize_stats_warps_obj_vector(false);
     }
-
 
     void initialize_stats_warps_obj_vector(bool bankIt){
 

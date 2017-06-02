@@ -53,7 +53,7 @@
     
 
 ///////////////////////////////////////////////////////////////////////////
-bool DRSVRdebug = true;
+bool DRSVRdebug = false;
 
 std::list<unsigned> shader_core_ctx::get_regs_written( const inst_t &fvt ) const
 {
@@ -66,7 +66,7 @@ std::list<unsigned> shader_core_ctx::get_regs_written( const inst_t &fvt ) const
    return result;
 }
 
-shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu, 
+shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
                                   class simt_core_cluster *cluster,
                                   unsigned shader_id,
                                   unsigned tpc_id,
@@ -92,28 +92,28 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
     m_memory_config = mem_config;
     m_stats = stats;
     unsigned warp_size=config->warp_size;
-    
+
     m_sid = shader_id;
     m_tpc = tpc_id;
-    
+
     m_pipeline_reg.reserve(N_PIPELINE_STAGES);
     for (int j = 0; j<N_PIPELINE_STAGES; j++) {
         m_pipeline_reg.push_back(register_set(m_config->pipe_widths[j],pipeline_stage_name_decode[j]));
     }
-    
+
     m_threadState = (thread_ctx_t*) calloc(sizeof(thread_ctx_t), config->n_thread_per_shader);
-    
+
     m_not_completed = 0;
     m_active_threads.reset();
     m_n_active_cta = 0;
-    for ( unsigned i = 0; i<MAX_CTA_PER_SHADER; i++ ) 
+    for ( unsigned i = 0; i<MAX_CTA_PER_SHADER; i++ )
         m_cta_status[i]=0;
     for (unsigned i = 0; i<config->n_thread_per_shader; i++) {
         m_thread[i]= NULL;
         m_threadState[i].m_cta_id = -1;
         m_threadState[i].m_active = false;
     }
-    
+
     // m_icnt = new shader_memory_interface(this,cluster);
     if ( m_config->gpgpu_perfect_mem ) {
         m_icnt = new perfect_memory_interface(this,cluster);
@@ -121,19 +121,19 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
         m_icnt = new shader_memory_interface(this,cluster);
     }
     m_mem_fetch_allocator = new shader_core_mem_fetch_allocator(shader_id,tpc_id,mem_config);
-    
+
     // fetch
     m_last_warp_fetched = 0;
-    
+
     #define STRSIZE 1024
     char name[STRSIZE];
     snprintf(name, STRSIZE, "L1I_%03d", m_sid);
     assert(drsvrObj);
     m_L1I = new read_only_cache( name,m_config->m_L1I_config,m_sid,get_shader_instruction_cache_id(),m_icnt,IN_L1I_MISS_QUEUE,drsvrObj);
-    
+
     m_warp.resize(m_config->max_warps_per_shader, shd_warp_t(this, warp_size));
     m_scoreboard = new Scoreboard(m_sid, m_config->max_warps_per_shader);
-    
+
     //scedulers
     //must currently occur after all inputs have been initialized.
     std::string sched_config = m_config->gpgpu_scheduler_string;
@@ -149,7 +149,7 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
                                          CONCRETE_SCHEDULER_WARP_LIMITING:
                                          NUM_CONCRETE_SCHEDULERS;
     assert ( scheduler != NUM_CONCRETE_SCHEDULERS );
-    
+
     for (int i = 0; i < m_config->gpgpu_num_sched_per_core; i++) {
         switch( scheduler )
         {
@@ -229,7 +229,7 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
                 abort();
         };
     }
-    
+
     for (unsigned i = 0; i < m_warp.size(); i++) {
         //distribute i's evenly though schedulers;
         schedulers[i%m_config->gpgpu_num_sched_per_core]->add_supervised_warp_id(i);
@@ -237,14 +237,14 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
     for ( int i = 0; i < m_config->gpgpu_num_sched_per_core; ++i ) {
         schedulers[i]->done_adding_supervised_warps();
     }
-    
+
     //op collector configuration
     enum { SP_CUS, SFU_CUS, MEM_CUS, GEN_CUS };
     m_operand_collector.add_cu_set(SP_CUS, m_config->gpgpu_operand_collector_num_units_sp, m_config->gpgpu_operand_collector_num_out_ports_sp);
     m_operand_collector.add_cu_set(SFU_CUS, m_config->gpgpu_operand_collector_num_units_sfu, m_config->gpgpu_operand_collector_num_out_ports_sfu);
     m_operand_collector.add_cu_set(MEM_CUS, m_config->gpgpu_operand_collector_num_units_mem, m_config->gpgpu_operand_collector_num_out_ports_mem);
     m_operand_collector.add_cu_set(GEN_CUS, m_config->gpgpu_operand_collector_num_units_gen, m_config->gpgpu_operand_collector_num_out_ports_gen);
-    
+
     opndcoll_rfu_t::port_vector_t in_ports;
     opndcoll_rfu_t::port_vector_t out_ports;
     opndcoll_rfu_t::uint_vector_t cu_sets;
@@ -256,7 +256,7 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
         m_operand_collector.add_port(in_ports,out_ports,cu_sets);
         in_ports.clear(),out_ports.clear(),cu_sets.clear();
     }
-    
+
     for (unsigned i = 0; i < m_config->gpgpu_operand_collector_num_in_ports_sfu; i++) {
         in_ports.push_back(&m_pipeline_reg[ID_OC_SFU]);
         out_ports.push_back(&m_pipeline_reg[OC_EX_SFU]);
@@ -265,17 +265,17 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
         m_operand_collector.add_port(in_ports,out_ports,cu_sets);
         in_ports.clear(),out_ports.clear(),cu_sets.clear();
     }
-    
+
     for (unsigned i = 0; i < m_config->gpgpu_operand_collector_num_in_ports_mem; i++) {
         in_ports.push_back(&m_pipeline_reg[ID_OC_MEM]);
         out_ports.push_back(&m_pipeline_reg[OC_EX_MEM]);
         cu_sets.push_back((unsigned)MEM_CUS);
-        cu_sets.push_back((unsigned)GEN_CUS);                       
+        cu_sets.push_back((unsigned)GEN_CUS);
         m_operand_collector.add_port(in_ports,out_ports,cu_sets);
         in_ports.clear(),out_ports.clear(),cu_sets.clear();
-    }   
-    
-    
+    }
+
+
     for (unsigned i = 0; i < m_config->gpgpu_operand_collector_num_in_ports_gen; i++) {
         in_ports.push_back(&m_pipeline_reg[ID_OC_SP]);
         in_ports.push_back(&m_pipeline_reg[ID_OC_SFU]);
@@ -283,26 +283,26 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
         out_ports.push_back(&m_pipeline_reg[OC_EX_SP]);
         out_ports.push_back(&m_pipeline_reg[OC_EX_SFU]);
         out_ports.push_back(&m_pipeline_reg[OC_EX_MEM]);
-        cu_sets.push_back((unsigned)GEN_CUS);   
+        cu_sets.push_back((unsigned)GEN_CUS);
         m_operand_collector.add_port(in_ports,out_ports,cu_sets);
         in_ports.clear(),out_ports.clear(),cu_sets.clear();
     }
-    
+
     m_operand_collector.init( m_config->gpgpu_num_reg_banks, this );
-    
+
     // execute
     m_num_function_units = m_config->gpgpu_num_sp_units + m_config->gpgpu_num_sfu_units + 1; // sp_unit, sfu, ldst_unit
     //m_dispatch_port = new enum pipeline_stage_name_t[ m_num_function_units ];
     //m_issue_port = new enum pipeline_stage_name_t[ m_num_function_units ];
-    
+
     //m_fu = new simd_function_unit*[m_num_function_units];
-    
+
     for (int k = 0; k < m_config->gpgpu_num_sp_units; k++) {
         m_fu.push_back(new sp_unit( &m_pipeline_reg[EX_WB], m_config, this ));
         m_dispatch_port.push_back(ID_OC_SP);
         m_issue_port.push_back(OC_EX_SP);
     }
-    
+
     for (int k = 0; k < m_config->gpgpu_num_sfu_units; k++) {
         m_fu.push_back(new sfu( &m_pipeline_reg[EX_WB], m_config, this ));
         m_dispatch_port.push_back(ID_OC_SFU);
@@ -314,15 +314,15 @@ shader_core_ctx::shader_core_ctx( class gpgpu_sim *gpu,
     m_fu.push_back(m_ldst_unit);
     m_dispatch_port.push_back(ID_OC_MEM);
     m_issue_port.push_back(OC_EX_MEM);
-    
+
     assert(m_num_function_units == m_fu.size() and m_fu.size() == m_dispatch_port.size() and m_fu.size() == m_issue_port.size());
-    
+
     //there are as many result buses as the width of the EX_WB stage
     num_result_bus = config->pipe_widths[EX_WB];
     for(unsigned i=0; i<num_result_bus; i++){
         this->m_result_bus.push_back(new std::bitset<MAX_ALU_LATENCY>());
     }
-    
+
     m_last_inst_gpu_sim_cycle = 0;
     m_last_inst_gpu_tot_sim_cycle = 0;
 }
@@ -373,7 +373,7 @@ void shader_core_ctx::init_warps( unsigned cta_id, unsigned start_thread, unsign
                     , active_threads.to_string().c_str()
             );
             */
-            
+
             m_simt_stack[i]->launch(start_pc,active_threads);
             m_warp[i].init(start_pc,cta_id,i,active_threads, m_dynamic_warp_id, m_sid );
             ++m_dynamic_warp_id;
@@ -382,10 +382,10 @@ void shader_core_ctx::init_warps( unsigned cta_id, unsigned start_thread, unsign
    }
 }
 
-// return the next pc of a thread 
+// return the next pc of a thread
 address_type shader_core_ctx::next_pc( int tid ) const
 {
-    if( tid == -1 ) 
+    if( tid == -1 )
         return -1;
     ptx_thread_info *the_thread = m_thread[tid];
     if ( the_thread == NULL )
@@ -433,7 +433,7 @@ void shader_core_stats::print( FILE* fout ) const
    fprintf(fout, "gpgpu_n_param_mem_insn = %d\n", gpgpu_n_param_insn);
 
    fprintf(fout, "gpgpu_n_shmem_bkconflict = %d\n", gpgpu_n_shmem_bkconflict);
-   fprintf(fout, "gpgpu_n_cache_bkconflict = %d\n", gpgpu_n_cache_bkconflict);   
+   fprintf(fout, "gpgpu_n_cache_bkconflict = %d\n", gpgpu_n_cache_bkconflict);
 
    fprintf(fout, "gpgpu_n_intrawarp_mshr_merge = %d\n", gpgpu_n_intrawarp_mshr_merge);
    fprintf(fout, "gpgpu_n_cmem_portconflict = %d\n", gpgpu_n_cmem_portconflict);
@@ -446,24 +446,24 @@ void shader_core_stats::print( FILE* fout ) const
    fprintf(fout, "gpgpu_stall_shd_mem[t_mem][icnt_rc] = %d\n", gpu_stall_shd_mem_breakdown[T_MEM][ICNT_RC_FAIL]);
    fprintf(fout, "gpgpu_stall_shd_mem[t_mem][data_port_stall] = %d\n", gpu_stall_shd_mem_breakdown[T_MEM][DATA_PORT_STALL]);
    fprintf(fout, "gpgpu_stall_shd_mem[s_mem][bk_conf] = %d\n", gpu_stall_shd_mem_breakdown[S_MEM][BK_CONF]);
-   fprintf(fout, "gpgpu_stall_shd_mem[gl_mem][bk_conf] = %d\n", 
-           gpu_stall_shd_mem_breakdown[G_MEM_LD][BK_CONF] + 
-           gpu_stall_shd_mem_breakdown[G_MEM_ST][BK_CONF] + 
-           gpu_stall_shd_mem_breakdown[L_MEM_LD][BK_CONF] + 
-           gpu_stall_shd_mem_breakdown[L_MEM_ST][BK_CONF]   
-           ); // coalescing stall at data cache 
-   fprintf(fout, "gpgpu_stall_shd_mem[gl_mem][coal_stall] = %d\n", 
-           gpu_stall_shd_mem_breakdown[G_MEM_LD][COAL_STALL] + 
-           gpu_stall_shd_mem_breakdown[G_MEM_ST][COAL_STALL] + 
-           gpu_stall_shd_mem_breakdown[L_MEM_LD][COAL_STALL] + 
-           gpu_stall_shd_mem_breakdown[L_MEM_ST][COAL_STALL]    
-           ); // coalescing stall + bank conflict at data cache 
-   fprintf(fout, "gpgpu_stall_shd_mem[gl_mem][data_port_stall] = %d\n", 
-           gpu_stall_shd_mem_breakdown[G_MEM_LD][DATA_PORT_STALL] + 
-           gpu_stall_shd_mem_breakdown[G_MEM_ST][DATA_PORT_STALL] + 
-           gpu_stall_shd_mem_breakdown[L_MEM_LD][DATA_PORT_STALL] + 
-           gpu_stall_shd_mem_breakdown[L_MEM_ST][DATA_PORT_STALL]    
-           ); // data port stall at data cache 
+   fprintf(fout, "gpgpu_stall_shd_mem[gl_mem][bk_conf] = %d\n",
+           gpu_stall_shd_mem_breakdown[G_MEM_LD][BK_CONF] +
+           gpu_stall_shd_mem_breakdown[G_MEM_ST][BK_CONF] +
+           gpu_stall_shd_mem_breakdown[L_MEM_LD][BK_CONF] +
+           gpu_stall_shd_mem_breakdown[L_MEM_ST][BK_CONF]
+           ); // coalescing stall at data cache
+   fprintf(fout, "gpgpu_stall_shd_mem[gl_mem][coal_stall] = %d\n",
+           gpu_stall_shd_mem_breakdown[G_MEM_LD][COAL_STALL] +
+           gpu_stall_shd_mem_breakdown[G_MEM_ST][COAL_STALL] +
+           gpu_stall_shd_mem_breakdown[L_MEM_LD][COAL_STALL] +
+           gpu_stall_shd_mem_breakdown[L_MEM_ST][COAL_STALL]
+           ); // coalescing stall + bank conflict at data cache
+   fprintf(fout, "gpgpu_stall_shd_mem[gl_mem][data_port_stall] = %d\n",
+           gpu_stall_shd_mem_breakdown[G_MEM_LD][DATA_PORT_STALL] +
+           gpu_stall_shd_mem_breakdown[G_MEM_ST][DATA_PORT_STALL] +
+           gpu_stall_shd_mem_breakdown[L_MEM_LD][DATA_PORT_STALL] +
+           gpu_stall_shd_mem_breakdown[L_MEM_ST][DATA_PORT_STALL]
+           ); // data port stall at data cache
    fprintf(fout, "gpgpu_stall_shd_mem[g_mem_ld][mshr_rc] = %d\n", gpu_stall_shd_mem_breakdown[G_MEM_LD][MSHR_RC_FAIL]);
    fprintf(fout, "gpgpu_stall_shd_mem[g_mem_ld][icnt_rc] = %d\n", gpu_stall_shd_mem_breakdown[G_MEM_LD][ICNT_RC_FAIL]);
    fprintf(fout, "gpgpu_stall_shd_mem[g_mem_ld][wb_icnt_rc] = %d\n", gpu_stall_shd_mem_breakdown[G_MEM_LD][WB_ICNT_RC_FAIL]);
@@ -487,12 +487,12 @@ void shader_core_stats::print( FILE* fout ) const
    fprintf(fout, "Stall:%d\t", shader_cycle_distro[2]);
    fprintf(fout, "W0_Idle:%d\t", shader_cycle_distro[0]);
    fprintf(fout, "W0_Scoreboard:%d", shader_cycle_distro[1]);
-   for (unsigned i = 3; i < m_config->warp_size + 3; i++) 
+   for (unsigned i = 3; i < m_config->warp_size + 3; i++)
       fprintf(fout, "\tW%d:%d", i-2, shader_cycle_distro[i]);
    fprintf(fout, "\n");
 
-   m_outgoing_traffic_stats->print(fout); 
-   m_incoming_traffic_stats->print(fout); 
+   m_outgoing_traffic_stats->print(fout);
+   m_incoming_traffic_stats->print(fout);
 }
 
 void shader_core_stats::event_warp_issued( unsigned s_id, unsigned warp_id, unsigned num_issued, unsigned dynamic_warp_id ) {
@@ -581,12 +581,12 @@ void shader_core_stats::visualizer_print( gzFile visualizer_file )
 
     // overall cache miss rates
     gzprintf(visualizer_file, "gpgpu_n_cache_bkconflict: %d\n", gpgpu_n_cache_bkconflict);
-    gzprintf(visualizer_file, "gpgpu_n_shmem_bkconflict: %d\n", gpgpu_n_shmem_bkconflict);     
+    gzprintf(visualizer_file, "gpgpu_n_shmem_bkconflict: %d\n", gpgpu_n_shmem_bkconflict);
 
 
    // instruction count per shader core
    gzprintf(visualizer_file, "shaderinsncount:  ");
-   for (unsigned i=0;i<m_config->num_shader();i++) 
+   for (unsigned i=0;i<m_config->num_shader();i++)
       gzprintf(visualizer_file, "%u ", m_num_sim_insn[i] );
    gzprintf(visualizer_file, "\n");
    // warp instruction count per shader core
@@ -596,13 +596,13 @@ void shader_core_stats::visualizer_print( gzFile visualizer_file )
    gzprintf(visualizer_file, "\n");
    // warp divergence per shader core
    gzprintf(visualizer_file, "shaderwarpdiv: ");
-   for (unsigned i=0;i<m_config->num_shader();i++) 
+   for (unsigned i=0;i<m_config->num_shader();i++)
       gzprintf(visualizer_file, "%u ", m_n_diverge[i] );
    gzprintf(visualizer_file, "\n");
 }
 
-#define PROGRAM_MEM_START 0xF0000000 /* should be distinct from other memory spaces... 
-                                        check ptx_ir.h to verify this does not overlap 
+#define PROGRAM_MEM_START 0xF0000000 /* should be distinct from other memory spaces...
+                                        check ptx_ir.h to verify this does not overlap
                                         other memory spaces */
 void shader_core_ctx::decode()
 {
@@ -652,7 +652,7 @@ void shader_core_ctx::fetch()
                 for( unsigned t=0; t<m_config->warp_size;t++) {
                     unsigned tid=warp_id*m_config->warp_size+t;
                     if( m_threadState[tid].m_active == true ) {
-                        m_threadState[tid].m_active = false; 
+                        m_threadState[tid].m_active = false;
                         unsigned cta_id = m_warp[warp_id].get_cta_id();
                         register_cta_thread_exit(cta_id);
                         m_not_completed -= 1;
@@ -661,7 +661,7 @@ void shader_core_ctx::fetch()
                         did_exit=true;
                     }
                 }
-                if( did_exit ) 
+                if( did_exit )
                     m_warp[warp_id].set_done_exit();
             }
 
@@ -669,7 +669,7 @@ void shader_core_ctx::fetch()
             if( !m_warp[warp_id].functional_done() && !m_warp[warp_id].imiss_pending() && m_warp[warp_id].ibuffer_empty() ) {
                 address_type pc  = m_warp[warp_id].get_pc();
                 address_type ppc = pc + PROGRAM_MEM_START;
-                unsigned nbytes=16; 
+                unsigned nbytes=16;
                 unsigned offset_in_block = pc & (m_config->m_L1I_config.get_line_sz()-1);
                 if( (offset_in_block+nbytes) > m_config->m_L1I_config.get_line_sz() )
                     nbytes = (m_config->m_L1I_config.get_line_sz()-offset_in_block);
@@ -731,7 +731,7 @@ void shader_core_ctx::issue_warp( register_set& pipe_reg_set, const warp_inst_t*
 
     warp_inst_t** pipe_reg = pipe_reg_set.get_free();
     assert(pipe_reg);
-    
+
     m_warp[warp_id].ibuffer_free();
     assert(next_inst->valid());
     **pipe_reg = *next_inst; // static instruction information
@@ -904,12 +904,15 @@ void scheduler_unit::set_OAWS_flags(std::vector< T > &input_list){
 template < class T >
 void scheduler_unit::warpThrottling(std::vector< T > &input_list, unsigned OCW_Value){
 
-    bool debugMode =  DRSVRdebug;
+    bool ocw_Throttling_EN = ( m_shader->m_config->drsvr_stats_runtime_ocw_throttling == 1 ) ? true : false ;
+
+    bool debugMode =  DRSVRdebug || ocw_Throttling_EN ;
 
     //debugMode = debugMode || (smObj->get_sm_id()==1 && ( (input_list.at(0)->get_warp_id()%2) == 0));
     //debugMode = true;
 
     bool greadyGo = true;
+    bool scoreBoardConsideration = false;
 
     unsigned adjusted_OCW_value;
 
@@ -991,6 +994,7 @@ void scheduler_unit::warpThrottling(std::vector< T > &input_list, unsigned OCW_V
         bool globalSpace = false;
         memory_space_t space = memory_space_t();
         unsigned OP;
+        bool scoreBoard_Collision = false;
 
         if (pI){
             OP = (*pI).op;
@@ -1003,34 +1007,56 @@ void scheduler_unit::warpThrottling(std::vector< T > &input_list, unsigned OCW_V
             }
         }
 
+        if (scoreBoardConsideration){
+            if (globalSpace){
+                if ( m_scoreboard->checkCollision(drsvr_warp_id, pI) ) {
+                    scoreBoard_Collision = true;
+                }
+            }
+        }
+
+
         // only valid for loads to global memory
         if (globalSpace){
-            if ( (input_list.at(i)->ibuffer_empty()) || (input_list.at(i)->waiting()) || (input_list.at(i)->done_exit()) || (adjusted_OCW_value==0) || (!valid) ) {
+            if ( (input_list.at(i)->ibuffer_empty()) || (input_list.at(i)->waiting()) || (input_list.at(i)->done_exit())  || (!valid) || (scoreBoard_Collision) ) {
 
-                if (i!=0){
-                    printf("DRSVR OCW THROTTLED! %u ; %u ; %u ; %u ; Adjusted:%u \n", input_list.at(i)->ibuffer_empty()
-                            ,input_list.at(i)->waiting()
-                            ,input_list.at(i)->done_exit()
-                            ,adjusted_OCW_value==0
-                            ,adjusted_OCW_value
-                    );
-                    input_list.at(i)->resetOCWLocalityStatus();
-                    input_list.at(i)->set_gprio(global_gtoprio);
-                    global_gtoprio++;
+                printf("WARP:%u DRSVR OCW THROTTLED CAN NOT BE RUN! %u ; %u ; %u ; %u ; %u ;\n"
+                        ,drsvr_warp_id
+                        ,input_list.at(i)->ibuffer_empty()
+                        ,input_list.at(i)->waiting()
+                        ,input_list.at(i)->done_exit()
+                        ,(!valid)
+                        ,scoreBoard_Collision
+                );
+
+                input_list.at(i)->resetOCWLocalityStatus();
+                input_list.at(i)->set_gprio(0);
                     //input_list.at(i)->set_gprio( (unsigned)-1);
-                }
-
-                else {
+            }
+            else if ( (adjusted_OCW_value == 0)){
                     // Greedy value should GO!
+                if ( i==0 ){
                     if (greadyGo){
                         assert(i==0);
                         input_list.at(i)->setOCWLocalityStatus();
                         input_list.at(i)->set_gprio(global_gtoprio);
                         global_gtoprio++;
                     }
-
                 }
-
+                else {
+                    printf("WARP:%u DRSVR OCW THROTTLED! THRASHING WARP %u ; %u ; %u ; %u ; %u ; %u;\n"
+                            ,drsvr_warp_id
+                            ,input_list.at(i)->ibuffer_empty()
+                            ,input_list.at(i)->waiting()
+                            ,input_list.at(i)->done_exit()
+                            ,(!valid)
+                            ,scoreBoard_Collision
+                            ,adjusted_OCW_value
+                    );
+                    input_list.at(i)->resetOCWLocalityStatus();
+                    input_list.at(i)->set_gprio(global_gtoprio);
+                    global_gtoprio++;
+                }
             }
             else {
                 input_list.at(i)->setOCWLocalityStatus();
@@ -1170,28 +1196,6 @@ void scheduler_unit::order_by_priority( bool isOAWS,
 
             this->set_OAWS_flags(preList);
 
-            /*printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER FLAGS: \n");
-            for (unsigned i=0; i<temp.size(); i++) {
-
-                if ( temp.at(i)->get_dynamic_warp_id() == 4294967295) {
-                    continue;
-                }
-                j++;
-
-                //shd_warp_t *test;
-                //test->oaws_approved();
-
-                printf("%u-%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_warp_id(), temp.at(i)->get_dynamic_warp_id(), temp.at(i)->get_pc(), temp.at(i)->get_sm_id() , temp.at(i)->oaws_approved());
-
-                if (temp.at(i)->oaws_approved()){
-                    o++;
-                }
-            }
-
-            printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j , o);
-            j=0;
-            o=0;
-*/
         }
 
         greedy_value = preList.at(0);
@@ -1202,45 +1206,6 @@ void scheduler_unit::order_by_priority( bool isOAWS,
         temp = preList;
 
         std::sort( temp.begin(), temp.end(), priority_func );
-
-        /*if ( (result_list.size()>0) && (result_list.at(0)->get_sm_id() == 9 )) {
-
-
-            printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER FLAGS: \n");
-            for (unsigned i = 0; i < temp.size(); i++) {
-
-                if (temp.at(i)->get_dynamic_warp_id() == 4294967295) {
-                    continue;
-                }
-                j++;
-
-                //shd_warp_t *test;
-                //test->oaws_approved();
-
-                printf("%u-%u - PC:%u - SM:%u [%u];\t", temp.at(i)->get_warp_id(), temp.at(i)->get_dynamic_warp_id(),
-                       temp.at(i)->get_pc(), temp.at(i)->get_sm_id(), temp.at(i)->oaws_approved());
-
-                if (temp.at(i)->oaws_approved()) {
-                    o++;
-                }
-            }
-
-            printf("\nActive Warps: %u OAWS Approved Warps: %u \n-----------------------------------------------\n", j,
-                   o);
-            j = 0;
-            o = 0;
-
-        }*/
-
-
-        /*bool greadyRemoved = false;
-
-        if (greedy_value->oaws_approved() == false){
-            result_list.pop_back();
-            greadyRemoved = true;
-
-        }*/
-
 
         iter = temp.begin();
         for ( unsigned count = 0; count < num_warps_to_add; ++count, ++iter ) {
@@ -1253,7 +1218,10 @@ void scheduler_unit::order_by_priority( bool isOAWS,
         }
 
 
-        if ( (result_list.size()>0) && /*(result_list.at(0)->get_sm_id() == 9 ) &&*/  DRSVRdebug) {
+        bool OAWS_EN = (m_shader->m_config->drsvr_stats_runtime_oaws== 1 ) ? true : false ;
+        bool debugMode = DRSVRdebug || OAWS_EN;
+
+        if ( (result_list.size()>0) && /*(result_list.at(0)->get_sm_id() == 9 ) &&*/  debugMode) {
 
             printf("\n-----------------------------------------------\nDRSVR WARP ORDER AFTER SORT: \n");
 
@@ -1263,22 +1231,13 @@ void scheduler_unit::order_by_priority( bool isOAWS,
 
 
             for (unsigned i = 0; i < result_list.size(); i++) {
+
                 if (result_list.at(i)->get_dynamic_warp_id() == 4294967295) {
                     continue;
                 }
                 j++;
 
-                shd_warp_t *test;
-                //test->print2_ibuffer();
-
-                //test->print2_ibuffer();
-
-                //m_simt_stack[my_warp_id]->get_active_mask().count();
-                //test->getActiveThreadCount();
-                //test->done_exit()
-                //test->waiting()
-                //test->oaws_approved();
-
+                //shd_warp_t *test;
 
                 if (result_list.at(i)->ibuffer_next_inst()){
                     printf("%u-%u - PC:%u - SM:%u [O:%u-%u][T:%u-%u][E:%u][W:%u]; Space:%u ; OP:%u inst :"
@@ -1300,38 +1259,7 @@ void scheduler_unit::order_by_priority( bool isOAWS,
 
         }
 
-        //printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$;\n");
-
-
-
-
-
-
-
-
-        /*
-        printf("\n-----------------------------------------------\nDRSVR WARP ORDER LAST: \n");
-        unsigned  j = 0;
-        for (unsigned i=0; i<result_list.size(); i++) {
-            if ( result_list.at(i)->get_dynamic_warp_id() == 4294967295) {
-                continue;
-            }
-            j++;
-            printf("%u \t", result_list.at(i)->get_dynamic_warp_id());
-
-            //printf("[%u-%u]\t"
-            //        , result_list.at(i)->get_dynamic_warp_id()
-            //        , result_list.at(i)->get_warp_id());
-
-        }
-        printf("\nActive Warps: %u \n-----------------------------------------------\n", j);
-        */
-
     } else if ( ORDERED_PRIORITY_FUNC_ONLY == ordering ) {
-
-        //DRSVR ADDED
-        //printf("DRSVR: ORDERED_PRIORITY_FUNC_ONLY!\n");
-        exit(0);
 
         std::sort( temp.begin(), temp.end(), priority_func );
         typename std::vector< T >::iterator iter = temp.begin();
@@ -1381,7 +1309,10 @@ void scheduler_unit::cycle()
         unsigned max_issue = m_shader->m_config->gpgpu_max_insn_issue_per_warp;
 
 
-        while( !warp(warp_id).waiting() && !warp(warp_id).ibuffer_empty() && (checked < max_issue) && (checked <= issued) && (issued < max_issue) /*&& ( (*iter)->oaws_approved() || warp(warp_id).ibuffer_next_inst()->op!=LOAD_OP )*/  ) {
+        while( !warp(warp_id).waiting() && !warp(warp_id).ibuffer_empty() && (checked < max_issue) && (checked <= issued) && (issued < max_issue) ) {
+
+
+
 
 
             // Shahriyar NOTE: warp_inst_t is instruction class
@@ -1396,6 +1327,23 @@ void scheduler_unit::cycle()
 
 
             m_simt_stack[warp_id]->get_pdom_stack_top_info(&pc,&rpc);
+
+
+            if ( ((*pI).space.is_global()) && ((*pI).op==LOAD_OP) ){
+                printf("DRSVR OAWS WARP READY: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Miss-On-Flight:%u ; Available MSHR:%u; OCW:%u ; Space:%u ; Valid:%u ; PC:%u ; pI->PC:%u ;\n"
+                        ,(*iter)->get_warp_id()
+                        , (*iter)->get_sm_id()
+                        , (*iter)->get_pc()
+                        , (*pI).op
+                        , (smObj)->get_missOnFlight()
+                        , (smObj)->get_availableMSHR()
+                        , (smObj)->get_OCW_value()
+                        , (*pI).space.get_type()
+                        , valid
+                        , pc
+                        , pI->pc
+                );
+            }
 
 
             SCHED_DPRINTF( "Warp (warp_id %u, dynamic_warp_id %u) has valid instruction (%s)\n",
@@ -1429,17 +1377,6 @@ void scheduler_unit::cycle()
                         assert( warp(warp_id).inst_in_pipeline() );
 
                         if ( (pI->op == LOAD_OP) || (pI->op == STORE_OP) || (pI->op == MEMORY_BARRIER_OP) ) {
-
-                            printf("DRSVR OAWS WARP READY: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Miss-On-Flight:%u ; Available MSHR:%u; OCW:%u ; Space:%u\n"
-                                    ,(*iter)->get_warp_id()
-                                    , (*iter)->get_sm_id()
-                                    , (*iter)->get_pc()
-                                    , (*pI).op
-                                    , (smObj)->get_missOnFlight()
-                                    , (smObj)->get_availableMSHR()
-                                    , (smObj)->get_OCW_value()
-                                    , (*pI).space.get_type()
-                            );
 
                             if (!(*iter)->oaws_approved() && pI->op==LOAD_OP){
 
@@ -1499,6 +1436,24 @@ void scheduler_unit::cycle()
                                 }
                             }                         }
                     } else {
+
+                        if ( ((*pI).space.is_global()) && ((*pI).op==LOAD_OP) ){
+                            printf("DRSVR OAWS WARP NOT PASSED SCORE BOARD!: Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Miss-On-Flight:%u ; Available MSHR:%u; OCW:%u ; Space:%u ; Valid:%u ; PC:%u ; pI->PC:%u ;\n"
+                                    ,(*iter)->get_warp_id()
+                                    , (*iter)->get_sm_id()
+                                    , (*iter)->get_pc()
+                                    , (*pI).op
+                                    , (smObj)->get_missOnFlight()
+                                    , (smObj)->get_availableMSHR()
+                                    , (smObj)->get_OCW_value()
+                                    , (*pI).space.get_type()
+                                    , valid
+                                    , pc
+                                    , pI->pc
+                            );
+
+                        }
+
                         SCHED_DPRINTF( "Warp (warp_id %u, dynamic_warp_id %u) fails scoreboard\n",
                                        (*iter)->get_warp_id(), (*iter)->get_dynamic_warp_id() );
                     }
@@ -1536,17 +1491,17 @@ void scheduler_unit::cycle()
                 }
             }
             break;
-        } 
+        }
     }
 
 
 
     // issue stall statistics:f
-    if( !valid_inst ) 
+    if( !valid_inst )
         m_stats->shader_cycle_distro[0]++; // idle or control hazard
-    else if( !ready_inst ) 
-        m_stats->shader_cycle_distro[1]++; // waiting for RAW hazards (possibly due to memory) 
-    else if( !issued_inst ) 
+    else if( !ready_inst )
+        m_stats->shader_cycle_distro[1]++; // waiting for RAW hazards (possibly due to memory)
+    else if( !issued_inst )
         m_stats->shader_cycle_distro[2]++; // pipeline stalled
 
 
@@ -1711,7 +1666,7 @@ two_level_active_scheduler::do_on_warp_issued( unsigned warp_id,
 {
     scheduler_unit::do_on_warp_issued( warp_id, num_issued, prioritized_iter );
     if ( SCHEDULER_PRIORITIZATION_LRR == m_inner_level_prioritization ) {
-        std::vector< shd_warp_t* > new_active; 
+        std::vector< shd_warp_t* > new_active;
         order_lrr( new_active,
                    m_next_cycle_prioritized_warps,
                    prioritized_iter,
@@ -1838,16 +1793,16 @@ unsigned shader_core_ctx::translate_local_memaddr( address_type localaddr, unsig
       // T = thread
       // nTpC = number of threads per CTA
       // nCpS = number of CTA per shader
-      // 
+      //
       // for a given local memory address threads in a CTA map to contiguous addresses,
-      // then distribute across memory space by CTAs from successive shader cores first, 
+      // then distribute across memory space by CTAs from successive shader cores first,
       // then by successive CTA in same shader core
       thread_base = 4*(kernel_padded_threads_per_cta * (m_sid + num_shader * (tid / kernel_padded_threads_per_cta))
-                       + tid % kernel_padded_threads_per_cta); 
+                       + tid % kernel_padded_threads_per_cta);
       max_concurrent_threads = kernel_padded_threads_per_cta * kernel_max_cta_per_shader * num_shader;
    } else {
-      // legacy mapping that maps the same address in the local memory space of all threads 
-      // to a single contiguous address region 
+      // legacy mapping that maps the same address in the local memory space of all threads
+      // to a single contiguous address region
       thread_base = 4*(m_config->n_thread_per_shader * m_sid + tid);
       max_concurrent_threads = num_shader * m_config->n_thread_per_shader;
    }
@@ -1954,8 +1909,8 @@ void ldst_unit::get_L1T_sub_stats(struct cache_sub_stats &css) const{
 void shader_core_ctx::warp_inst_complete(const warp_inst_t &inst)
 {
    #if 0
-      printf("[warp_inst_complete] uid=%u core=%u warp=%u pc=%#x @ time=%llu issued@%llu\n", 
-             inst.get_uid(), m_sid, inst.warp_id(), inst.pc, gpu_tot_sim_cycle + gpu_sim_cycle, inst.get_issue_cycle()); 
+      printf("[warp_inst_complete] uid=%u core=%u warp=%u pc=%#x @ time=%llu issued@%llu\n",
+             inst.get_uid(), m_sid, inst.warp_id(), inst.pc, gpu_tot_sim_cycle + gpu_sim_cycle, inst.get_issue_cycle());
    #endif
   if(inst.op_pipe==SP__OP)
 	  m_stats->m_num_sp_committed[m_sid]++;
@@ -2031,9 +1986,9 @@ bool ldst_unit::shared_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, 
    if( stall ) {
        fail_type = S_MEM;
        rc_fail = BK_CONF;
-   } else 
+   } else
        rc_fail = NO_RC_FAIL;
-   return !stall; 
+   return !stall;
 }
 
 mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
@@ -2081,10 +2036,10 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
             smObj->update_dlc_table(mf->get_wid(), mf->get_sid(), PC ,INST ,ACC ,SET,isLoad);
             smObj->updateOCW(FCLstatus, SET, ACC);
 
-            //bool debugMode = DRSVRdebug ;
+            bool debugMode = DRSVRdebug ;
             //debugMode = debugMode || (mf->get_sid()==9) ;
 
-            bool debugMode = true;
+            //bool debugMode = true;
 
             smObj->set_OCW_value(smObj->getOCW(debugMode));
 
