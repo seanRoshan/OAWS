@@ -1940,48 +1940,46 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
 
     if (smObj){
 
-
-        /*if (DRSVRdebug){
-            mf->print2();
-            inst.accessq_print();
-        }*/
-
-        address_type  blockAddress = m_config->m_L1D_config.block_addr(mf->get_addr());
-        unsigned set_index = m_config->m_L1D_config.set_index(blockAddress);
-
-        //bool FCLstatus = smObj->global_FCL_obj->update_FCLUnit(mf->get_wid(),mf->get_sid(),mf->get_pc(),inst.accessq_count(),status, blockAddress,(mf)->is_write());
-
-        smObj->global_FCL_obj->update_FCLUnit(mf->get_wid(),mf->get_sid(),mf->get_pc(),inst.accessq_count(),status, set_index,(mf)->is_write());
-
-        bool isLoad = (!(mf)->is_write());
-
-        if (smObj->global_FCL_obj->isDone() && smObj->global_FCL_obj->isDivergent() && isLoad ){
-
-            unsigned *DLCEntry = smObj->global_FCL_obj->getDLCEntry();
-            bool FCLstatus = smObj->global_FCL_obj->isFCL();
+        if (inst.space.is_global()){
 
 
-            unsigned PC = DLCEntry[0];
-            unsigned INST = DLCEntry[1];
-            unsigned ACC = DLCEntry[2];
-            unsigned SET = DLCEntry[3];
+            address_type  blockAddress = m_config->m_L1D_config.block_addr(mf->get_addr());
+            unsigned set_index = m_config->m_L1D_config.set_index(blockAddress);
 
-            smObj->update_dlc_table(mf->get_wid(), mf->get_sid(), PC ,INST ,ACC ,SET,isLoad);
-            smObj->updateOCW(FCLstatus, SET, ACC);
+            smObj->global_FCL_obj->update_FCLUnit(mf->get_wid(),mf->get_sid(),mf->get_pc(),inst.accessq_count(),status, set_index,(mf)->is_write());
 
-            bool debugMode = DRSVRdebug || m_config->drsvr_stats_runtime_ocw_estimation;
-            //debugMode = debugMode || (mf->get_sid()==9) ;
+            bool isLoad = (!(mf)->is_write());
 
-            //bool debugMode = true;
+            if (smObj->global_FCL_obj->isDone() && smObj->global_FCL_obj->isDivergent() && isLoad ){
 
-            smObj->set_OCW_value(smObj->getOCW(debugMode));
+                unsigned *DLCEntry = smObj->global_FCL_obj->getDLCEntry();
+                bool FCLstatus = smObj->global_FCL_obj->isFCL();
 
-            if (debugMode) {
-                printf("DRSVR FCL UNIT DLCLOCKED! [%u;%u;%u] OCW:%u\t", mf->get_wid(), mf->get_sid(), mf->get_pc(),
-                       smObj->get_OCW_value());
-            }
 
-            smObj->update_histogram_double(mf->get_wid(),"H/L Ratio",smObj->global_FCL_obj->getRatio());
+                unsigned PC = DLCEntry[0];
+                unsigned INST = DLCEntry[1];
+                unsigned ACC = DLCEntry[2];
+                unsigned SET = DLCEntry[3];
+
+                smObj->update_dlc_table(mf->get_wid(), mf->get_sid(), PC ,INST ,ACC ,SET,isLoad);
+                smObj->updateOCW(FCLstatus, SET, ACC);
+
+                bool debugMode = DRSVRdebug || m_config->drsvr_stats_runtime_ocw_estimation;
+                //debugMode = debugMode || (mf->get_sid()==9) ;
+
+                //bool debugMode = true;
+
+                smObj->set_OCW_value(smObj->getOCW(debugMode));
+
+                if (debugMode) {
+                    printf("DRSVR FCL UNIT DLCLOCKED! [%u;%u;%u] OCW:%u\t", mf->get_wid(), mf->get_sid(), mf->get_pc(),
+                           smObj->get_OCW_value());
+                }
+
+                smObj->update_histogram_double(mf->get_wid(),"H/L Ratio", smObj->global_FCL_obj->getRatio());
+                smObj->update_histogram(mf->get_wid(), "MISS_COUNT_DIST", smObj->global_FCL_obj->getMissCount());
+                smObj->update_histogram(mf->get_wid(), "HIT_COUNT_DIST", smObj->global_FCL_obj->getHitCount());
+                smObj->update_histogram(mf->get_wid(), "LOAD_COUNT_DIST", smObj->global_FCL_obj->getLoadCount());
 
                 if (FCLstatus){
                     if (debugMode){
@@ -1995,14 +1993,9 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
                     }
                     smObj->update_histogram(mf->get_wid(),"FCL",0);
                 }
+            }
+
         }
-
-
-        //printf("DRSVR process_cache_access! Addr = %u ; DRSVR set_index = %u ;\n", blockAddress, set_index,set_index);
-
-        //smObj->updateFCL(FCLstatus);
-
-
     }
 
     mem_stage_stall_type result = NO_RC_FAIL;

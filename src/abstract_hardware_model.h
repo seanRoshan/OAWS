@@ -1875,6 +1875,19 @@ public:
         debugMode = true;
     }
 
+    unsigned getMissCount(){
+        assert(FCLValid);
+        return MISS_COUNT;
+    }
+
+    unsigned getHitCount(){
+        assert(FCLValid);
+        return HIT_COUNT;
+    }
+
+    unsigned getLoadCount(){
+        return LOAD_COUNT;
+    }
 
     double getRatio(){
         assert(FCLValid);

@@ -910,6 +910,8 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
         std::size_t found = m_name.find("L1D");
         if (found!=std::string::npos){
             if (m_mshrs.isAlreadyOccluded(mf->get_wid(), addr, block_addr)){
+                assert(smObj);
+                smObj->update_histogram(mf->get_wid(),"REPLAY_HIT",m_mshrs.getReplayCount());
                 m_mshrs.resetOcclusionFlag();
                 if (DRSVRdebug){
                     printf("DRSVR 1 MSHR HIT:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ;\n", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str() );
@@ -917,7 +919,6 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
                     printf("\n");
                     printf("Occlusion Solved!\n");
                 }
-
             }
         }
 
@@ -934,6 +935,8 @@ void baseline_cache::send_read_request(new_addr_type addr, new_addr_type block_a
         std::size_t found = m_name.find("L1D");
         if (found!=std::string::npos){
             if (m_mshrs.isAlreadyOccluded(mf->get_wid(), addr, block_addr)){
+                assert(smObj);
+                smObj->update_histogram(mf->get_wid(),"REPALY_MISS",m_mshrs.getReplayCount());
                 m_mshrs.resetOcclusionFlag();
                 if (DRSVRdebug){
                     printf("DRSVR 2 MSHR NOT HIT:> SM_ID:%u ; PC:%u ; Addr:%u-%u ; warp_id:%u ; mask:%s ;\n", mf->get_sid(), mf->get_pc(), addr, block_addr, mf->get_wid(), mf->get_access_warp_mask().to_string().c_str() );

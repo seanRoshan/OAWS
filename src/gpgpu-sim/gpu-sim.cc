@@ -849,6 +849,12 @@ void gpgpu_sim::drsvr_printHistogramStats(){
         printf("\n\n");
         this->drsvr_printHistogramSingle("H/L Ratio");
         printf("\n\n");
+        this->drsvr_printHistogramSingle("MISS_COUNT_DIST");
+        printf("\n\n");
+        this->drsvr_printHistogramSingle("HIT_COUNT_DIST");
+        printf("\n\n");
+        this->drsvr_printHistogramSingle("LOAD_COUNT_DIST");
+        printf("\n\n");
     }
 
     if (OCCLUSION){
