@@ -1995,6 +1995,8 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
 
                 smObj->update_histogram_string(mf->get_wid(), "M/L Ratio", ratio_string);
 
+                smObj->update_PC_histogram_string(mf->get_wid(), mf->get_pc(), "M/L Ratio", ratio_string);
+
                 smObj->update_PC_histogram(mf->get_wid(), mf->get_pc(), "MISS_COUNT_DIST", smObj->global_FCL_obj->getMissCount());
 
                 smObj->update_histogram_double(mf->get_wid(), "H/L Ratio", smObj->global_FCL_obj->getRatio());

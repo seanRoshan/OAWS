@@ -1687,18 +1687,6 @@ private:
     }
 
 
-   /* void check_PC_key (unsigned input_pc, std::string myHistogramName, unsigned type){
-
-        std::map< unsigned, Histogram* >::iterator it;
-
-        it = stats_obj_PCMAP_obj.find(input_pc);
-
-        if (it != stats_obj_PCMAP_obj.end()){
-            stats_obj_PCMAP_obj[input_pc] = create_new_histogram_obj(myHistogramName, type);
-        }
-
-    }*/
-
     unsigned get_last_element_index() {
         if (this->stats_name_vector.size()>0){
             return (this->stats_name_vector.size()-1);
@@ -1875,6 +1863,78 @@ public:
         stats_obj_PCMAP.at(input_name).at(input_pc)->update_histogram(input_date);
 
     }
+
+    void update_PC_Histogram_double(std::string input_name , unsigned input_pc, double input_date) {
+
+        std::map< std::string, std::map < unsigned, Histogram*, std::less<unsigned> > > :: iterator it_name;
+
+        it_name = stats_obj_PCMAP.find(input_name);
+
+        if (it_name == stats_obj_PCMAP.end()){
+
+            std::map< unsigned, Histogram*, std::less<unsigned> > stats_obj_PCMAP_obj ;
+
+            stats_obj_PCMAP_obj[input_pc] = create_new_histogram_obj(input_name, 1);
+
+            stats_obj_PCMAP[input_name] = stats_obj_PCMAP_obj;
+
+        }
+
+        else {
+
+            std::map< unsigned, Histogram*, std::less<unsigned> >::iterator it_pc;
+
+            it_pc = stats_obj_PCMAP.at(input_name).find(input_pc);
+
+            if (it_pc == stats_obj_PCMAP.at(input_name).end()){
+
+                stats_obj_PCMAP.at(input_name)[input_pc] = create_new_histogram_obj(input_name, 1);
+            }
+        }
+
+        // UPDATE
+
+        stats_obj_PCMAP.at(input_name).at(input_pc)->update_histogram_double(input_date);
+
+    }
+
+    void update_PC_Histogram_string(std::string input_name , unsigned input_pc, std::string input_date) {
+
+        std::map< std::string, std::map < unsigned, Histogram*, std::less<unsigned> > > :: iterator it_name;
+
+        it_name = stats_obj_PCMAP.find(input_name);
+
+        if (it_name == stats_obj_PCMAP.end()){
+
+            std::map< unsigned, Histogram*, std::less<unsigned> > stats_obj_PCMAP_obj ;
+
+            stats_obj_PCMAP_obj[input_pc] = create_new_histogram_obj(input_name, 3);
+
+            stats_obj_PCMAP[input_name] = stats_obj_PCMAP_obj;
+
+        }
+
+        else {
+
+            std::map< unsigned, Histogram*, std::less<unsigned> >::iterator it_pc;
+
+            it_pc = stats_obj_PCMAP.at(input_name).find(input_pc);
+
+            if (it_pc == stats_obj_PCMAP.at(input_name).end()){
+
+                stats_obj_PCMAP.at(input_name)[input_pc] = create_new_histogram_obj(input_name, 3);
+            }
+        }
+
+        // UPDATE
+
+        stats_obj_PCMAP.at(input_name).at(input_pc)->update_histogram_string(input_date);
+
+    }
+
+
+
+
 
     void print_PC_Histogram(std::string input_name){
 
@@ -2321,6 +2381,20 @@ public:
         global_stats_obj->update_PC_Histogram(histogramName, input_pc, input_data);
         stats_kernels_obj_global_aggr->update_PC_Histogram(histogramName, input_pc, input_data);
     }
+
+
+    void update_PC_histogram_double(unsigned input_warp_id, unsigned input_pc, std::string histogramName, double input_data){
+        stats_warps_obj_vector.at(input_warp_id)->update_PC_Histogram_double(histogramName, input_pc, input_data);
+        global_stats_obj->update_PC_Histogram_double(histogramName, input_pc, input_data);
+        stats_kernels_obj_global_aggr->update_PC_Histogram_double(histogramName, input_pc, input_data);
+    }
+
+    void update_PC_histogram_string(unsigned input_warp_id, unsigned input_pc, std::string histogramName, std::string input_data){
+        stats_warps_obj_vector.at(input_warp_id)->update_PC_Histogram_string(histogramName, input_pc, input_data);
+        global_stats_obj->update_PC_Histogram_string(histogramName, input_pc, input_data);
+        stats_kernels_obj_global_aggr->update_PC_Histogram_string(histogramName, input_pc, input_data);
+    }
+
 
     void update_histogram(unsigned input_warp_id, std::string histogramName, unsigned input_data){
         stats_warps_obj_vector.at(input_warp_id)->update_histogram(histogramName, input_data);
