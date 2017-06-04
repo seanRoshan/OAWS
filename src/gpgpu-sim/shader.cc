@@ -894,6 +894,8 @@ void scheduler_unit::set_OAWS_flags(std::vector< T > &input_list){
                 input_list.at(i)->resetOAWSApproved();
             }
 
+            smObj->update_PC_histogram(my_warp_id, PC, "MISS_PRED_DIST",smObj->getMissPredictionCount());
+
         }
         else {
             input_list.at(i)->setOAWSApproved();

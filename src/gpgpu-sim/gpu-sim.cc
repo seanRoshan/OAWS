@@ -875,6 +875,8 @@ void gpgpu_sim::drsvr_printHistogramStats(){
         printf("\n\n");
         this->drsvr_PC_printHistogramSingle("MISS_COUNT_DIST");
         printf("\n\n");
+        this->drsvr_PC_printHistogramSingle("MISS_PRED_DIST");
+        printf("\n\n");
         this->drsvr_printHistogramSingle("MISS_COUNT_DIST");
         printf("\n\n");
         this->drsvr_printHistogramSingle("HIT_COUNT_DIST");

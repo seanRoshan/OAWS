@@ -2269,6 +2269,10 @@ private:
         unsigned OCW_VALUE;
         //bool OCW_VALID;
 
+        unsigned missPrediction;
+
+
+
 
 public:
 
@@ -2296,6 +2300,7 @@ public:
 
         this->initialize_stats_warps_obj_vector(false);
     }
+
 
     void enableFCLDebug(){
         global_FCL_obj->enableDebugMode();
@@ -2524,6 +2529,10 @@ public:
                 , availableMSHR, missOnFlight);
     }
 
+    unsigned getMissPredictionCount(){
+        return missPrediction;
+    }
+
     bool missPred(unsigned input_PC, unsigned active_threads, unsigned gto_prio){
 
         bool DRSVRdebug = false;
@@ -2547,6 +2556,8 @@ public:
             //requiredMSHR = 1;
             requiredMSHR = 1 + gto_prio;
         }
+
+        missPrediction = requiredMSHR;
 
         if ( (remainingMSHR<requiredMSHR) ){
             if ( DRSVRdebug ){
@@ -2578,6 +2589,7 @@ public:
 
             // Locality warps should be issued anyway
             if (OCW_Approved){
+                missPrediction = 0;
                 return true;
             }
 
@@ -2592,7 +2604,9 @@ public:
                     ,Set
             );*/
 
-            return (missPred(input_PC, active_threads, gto_prio));
+            bool missPred_Approved = missPred(input_PC, active_threads, gto_prio);
+
+            return (missPred_Approved);
 
         }
         else {
