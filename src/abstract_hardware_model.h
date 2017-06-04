@@ -1884,10 +1884,10 @@ public:
 
         if (it_name != stats_obj_PCMAP.end()){
 
-
             std::map< unsigned, Histogram*, std::less<unsigned> >::iterator it_pc;
 
             for (it_pc = stats_obj_PCMAP.at(input_name).begin(); it_pc != stats_obj_PCMAP.at(input_name).end(); ++it_pc ){
+
 
                 printf("%sPC[%u]:\n", input_name.c_str(), it_pc->first );
 
