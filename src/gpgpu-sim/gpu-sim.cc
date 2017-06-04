@@ -757,11 +757,16 @@ void gpgpu_sim::init_smObjVector(){
     unsigned numberOfShaders= m_config.num_shader();
 
     for (unsigned i=0; i<numberOfShaders; i++){
+
        DRSVR *smObj = new DRSVR(i);
+
        if (m_config.m_shader_config.drsvr_stats_runtime_fclDetails == 1){
            smObj->enableFCLDebug();
        }
+
        smObjVector.push_back(smObj);
+
+       //delete smObj;
     }
 
     printf("DRSVR smObjVector has been initialized!\n");
@@ -836,6 +841,21 @@ void gpgpu_sim::drsvr_printHistogramSingle(std::string histogramName){
 
 }
 
+void gpgpu_sim::drsvr_PC_printHistogramSingle(std::string histogramName){
+
+    unsigned numberOfShaders= m_config.num_shader();
+
+    printf("-------------------------------%s DETAILS------------------------------------\n\n", histogramName.c_str());
+
+    for (unsigned i=0; i<numberOfShaders; i++){
+        //smObjVector.at(i)->print_histogram_global_vector(histogramName);
+        smObjVector.at(i)->print_pc_histogram_global_aggr(histogramName);
+    }
+
+    printf("----------------------------END OF %s DETAILS--------------------------------\n", histogramName.c_str());
+
+}
+
 void gpgpu_sim::drsvr_printHistogramStats(){
 
     bool FCL = (m_config.m_shader_config.gpgpu_drsvr_stats_fcl== 1 ) ? true : false ;
@@ -848,6 +868,10 @@ void gpgpu_sim::drsvr_printHistogramStats(){
         this->drsvr_printHistogramSingle("FCL");
         printf("\n\n");
         this->drsvr_printHistogramSingle("H/L Ratio");
+        printf("\n\n");
+        this->drsvr_printHistogramSingle("M/L Ratio");
+        printf("\n\n");
+        this->drsvr_PC_printHistogramSingle("M/L Ratio");
         printf("\n\n");
         this->drsvr_printHistogramSingle("MISS_COUNT_DIST");
         printf("\n\n");

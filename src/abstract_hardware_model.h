@@ -769,7 +769,6 @@ public:
 
     Histogram(std::string inputName, unsigned input_sm_id , unsigned input_warp_id, unsigned type) {
 
-
         this->histogramName = inputName;
         this->h_sm_id = input_sm_id;
         this->h_warp_id = input_warp_id;
@@ -823,6 +822,32 @@ public:
             histogramCounterVector.push_back(1);
         }
 
+
+    }
+
+    void update_histogram_string(std::string input_date){
+
+        assert(type==3);
+
+        bool matched = false;
+
+        for (unsigned i=0; i<histogramVector_string.size(); i++) {
+
+            assert(matched==false);
+
+            if (histogramVector_string.at(i)==input_date){
+                histogramCounterVector.at(i)++;
+                matched = true;
+                break;
+            }
+
+        }
+
+        if (!matched) {
+            assert(matched==false);
+            histogramVector_string.push_back(input_date);
+            histogramCounterVector.push_back(1);
+        }
 
     }
 
@@ -936,6 +961,31 @@ public:
                 }
             }
         }
+
+        if (type == 3) {
+
+            assert(histogramCounterVector.size() == histogramVector_string.size());
+
+            if (histogramVector_string.size() > 0) {
+                for (unsigned i = 0; i < histogramVector_string.size(); i++) {
+                    for (unsigned j = 0; j < histogramVector_string.size() - 1; j++) {
+                        if (histogramVector_string.at(j) > histogramVector_string.at(j + 1)) {
+
+                            unsigned temp = histogramCounterVector.at(j);
+                            histogramCounterVector.at(j) = histogramCounterVector.at(j + 1);
+                            histogramCounterVector.at(j + 1) = temp;
+
+                            std::string tempS;
+                            tempS = histogramVector_string.at(j);
+                            histogramVector_string.at(j) = histogramVector_string.at(j + 1);
+                            histogramVector_string.at(j + 1) = tempS;
+
+                        }
+                    }
+                }
+            }
+        }
+
     }
 
     bool is_empty(){
@@ -1021,6 +1071,44 @@ public:
 
 
         }
+
+        if (type == 3){
+
+            assert(histogramCounterVector.size() == histogramVector_string.size());
+
+            this->sort_histogram_byName();
+
+            if (histogramVector_string.size()>0) {
+
+                char headerBuffer[100];
+
+                unsigned headerSize = sprintf(headerBuffer,
+                                              "######################### DRSVR - [SM: %u ; WARP: %u] - %s #########################\n",
+                                              this->h_sm_id, this->h_warp_id, histogramName.c_str());
+
+                printf("######################### DRSVR - [SM: %u ; WARP: %u] - %s #########################\n"
+                        , this->h_sm_id
+                        , this->h_warp_id
+                        , histogramName.c_str());
+
+                for (unsigned i=0; i<histogramVector_string.size(); i++){
+                    printf("%s[%s] : %u\n"
+                            , histogramName.c_str()
+                            , histogramVector_string.at(i).c_str()
+                            , histogramCounterVector.at(i));
+                }
+
+                for (unsigned i=0; i<headerSize-1; i++){
+                    printf("#");
+                }
+
+                printf("\n\n");
+
+            }
+
+
+        }
+
 
     }
 };
@@ -1587,6 +1675,9 @@ private:
     std::vector<std::string> stats_name_vector;
     std::vector<Histogram*> stats_obj_vector;
 
+    std::map< std::string, std::map < unsigned, Histogram*, std::less<unsigned> > > stats_obj_PCMAP;
+
+
     unsigned  s_sm_id;
     unsigned  s_warp_id;
 
@@ -1594,6 +1685,19 @@ private:
         Histogram *warp_parts_obj = new Histogram(myHistogramName, s_sm_id, s_warp_id, type);
         return (warp_parts_obj);
     }
+
+
+   /* void check_PC_key (unsigned input_pc, std::string myHistogramName, unsigned type){
+
+        std::map< unsigned, Histogram* >::iterator it;
+
+        it = stats_obj_PCMAP_obj.find(input_pc);
+
+        if (it != stats_obj_PCMAP_obj.end()){
+            stats_obj_PCMAP_obj[input_pc] = create_new_histogram_obj(myHistogramName, type);
+        }
+
+    }*/
 
     unsigned get_last_element_index() {
         if (this->stats_name_vector.size()>0){
@@ -1603,7 +1707,9 @@ private:
 
     unsigned get_stat_vector_size() {
         if (stats_name_vector.size()!=stats_obj_vector.size()){
-            printf("Something is Wrong: Name:%u ; Obj:%u", stats_name_vector.size(), stats_obj_vector.size());
+            stats_obj_vector.clear();
+            stats_name_vector.clear();
+            printf("Something is Wrong: Name:%u ; Obj:%u\n SM_ID:%u ; WARP_ID:%u ;", stats_name_vector.size(), stats_obj_vector.size(), s_sm_id, s_warp_id);
         }
         assert(stats_name_vector.size()==stats_obj_vector.size());
         return (this->stats_name_vector.size());
@@ -1643,17 +1749,18 @@ public:
         s_warp_id = warp_id_input;
         stats_name_vector.clear();
         stats_obj_vector.clear();
+        stats_obj_PCMAP.clear();
     }
 
     void update_histogram(std::string histogramName_input, unsigned input_data){
 
-        unsigned statVectorSize = this->get_stat_vector_size();
-        unsigned foundIndex = this->search_histogram(histogramName_input);
+        unsigned statVectorSize = get_stat_vector_size();
+        unsigned foundIndex = search_histogram(histogramName_input);
 
         if (foundIndex == statVectorSize){
             // Create a new Histogram
-            this->stats_name_vector.push_back(histogramName_input);
-            this->stats_obj_vector.push_back(this->create_new_histogram_obj(histogramName_input,0));
+            stats_name_vector.push_back(histogramName_input);
+            stats_obj_vector.push_back(create_new_histogram_obj(histogramName_input,0));
             foundIndex = get_last_element_index();
         }
 
@@ -1663,21 +1770,21 @@ public:
             this->stats_obj_vector.at(foundIndex)->update_histogram(input_data);
         }
 
-
     }
 
 
     void update_histogram_double(std::string histogramName_input, double input_data){
 
-        unsigned statVectorSize = this->get_stat_vector_size();
-        unsigned foundIndex = this->search_histogram(histogramName_input);
+        unsigned statVectorSize = get_stat_vector_size();
+        unsigned foundIndex = search_histogram(histogramName_input);
 
         if (foundIndex == statVectorSize){
             // Create a new Histogram
-            this->stats_name_vector.push_back(histogramName_input);
-            this->stats_obj_vector.push_back(this->create_new_histogram_obj(histogramName_input,1));
+            stats_name_vector.push_back(histogramName_input);
+            stats_obj_vector.push_back(create_new_histogram_obj(histogramName_input,1));
             foundIndex = get_last_element_index();
         }
+
 
         // Update an existing histogram
         if (stats_obj_vector.size()>0){
@@ -1685,6 +1792,28 @@ public:
             this->stats_obj_vector.at(foundIndex)->update_histogram_double(input_data);
         }
 
+    }
+
+
+
+    void update_histogram_string(std::string histogramName_input, std::string input_data){
+
+        unsigned statVectorSize = get_stat_vector_size();
+        unsigned foundIndex = search_histogram(histogramName_input);
+
+        if (foundIndex == statVectorSize){
+            // Create a new Histogram
+            stats_name_vector.push_back(histogramName_input);
+            stats_obj_vector.push_back(create_new_histogram_obj(histogramName_input,3));
+            foundIndex = get_last_element_index();
+        }
+
+
+        // Update an existing histogram
+        if (stats_obj_vector.size()>0){
+            assert(foundIndex<stats_obj_vector.size());
+            this->stats_obj_vector.at(foundIndex)->update_histogram_string(input_data);
+        }
 
     }
 
@@ -1712,6 +1841,66 @@ public:
         }
 
     }
+
+    void update_PC_Histogram(std::string input_name , unsigned input_pc,  unsigned input_date) {
+
+        std::map< std::string, std::map < unsigned, Histogram*, std::less<unsigned> > > :: iterator it_name;
+
+        it_name = stats_obj_PCMAP.find(input_name);
+
+        if (it_name == stats_obj_PCMAP.end()){
+
+            std::map< unsigned, Histogram*, std::less<unsigned> > stats_obj_PCMAP_obj ;
+
+            stats_obj_PCMAP_obj[input_pc] = create_new_histogram_obj(input_name, 0);
+
+            stats_obj_PCMAP[input_name] = stats_obj_PCMAP_obj;
+
+        }
+
+        else {
+
+            std::map< unsigned, Histogram*, std::less<unsigned> >::iterator it_pc;
+
+            it_pc = stats_obj_PCMAP.at(input_name).find(input_pc);
+
+            if (it_pc == stats_obj_PCMAP.at(input_name).end()){
+
+                stats_obj_PCMAP.at(input_name)[input_pc] = create_new_histogram_obj(input_name, 0);
+            }
+        }
+
+        // UPDATE
+
+        stats_obj_PCMAP.at(input_name).at(input_pc)->update_histogram(input_date);
+
+    }
+
+    void print_PC_Histogram(std::string input_name){
+
+        std::map< std::string, std::map < unsigned, Histogram*, std::less<unsigned> > > :: iterator it_name;
+
+        it_name = stats_obj_PCMAP.find(input_name);
+
+        if (it_name != stats_obj_PCMAP.end()){
+
+
+            std::map< unsigned, Histogram*, std::less<unsigned> >::iterator it_pc;
+
+            for (it_pc = stats_obj_PCMAP.at(input_name).begin(); it_pc != stats_obj_PCMAP.at(input_name).end(); ++it_pc ){
+
+                printf("%sPC[%u]:\n", input_name.c_str(), it_pc->first );
+
+                it_pc->second->print_histogram();
+
+                printf("\n");
+
+            }
+
+        }
+
+    }
+
 
 };
 
@@ -2052,6 +2241,8 @@ public:
         global_FCL_obj->enableDebugMode();
     }
 
+
+
     void initialize_stats_warps_obj_vector(bool bankIt){
 
         if (bankIt){
@@ -2064,8 +2255,9 @@ public:
         for (unsigned d_warp_id=0; d_warp_id<warpPerSM; d_warp_id++) {
 
             DRSVRSTATS *statsObj_temp = new DRSVRSTATS(d_sm_id, d_warp_id);
+
             stats_warps_obj_vector.push_back(statsObj_temp);
-            delete statsObj_temp;
+
         }
 
         //delete global_stats_obj;
@@ -2124,6 +2316,11 @@ public:
         return d_sm_id;
     }
 
+    void update_PC_histogram(unsigned input_warp_id, unsigned input_pc, std::string histogramName, unsigned input_data){
+        stats_warps_obj_vector.at(input_warp_id)->update_PC_Histogram(histogramName, input_pc, input_data);
+        global_stats_obj->update_PC_Histogram(histogramName, input_pc, input_data);
+        stats_kernels_obj_global_aggr->update_PC_Histogram(histogramName, input_pc, input_data);
+    }
 
     void update_histogram(unsigned input_warp_id, std::string histogramName, unsigned input_data){
         stats_warps_obj_vector.at(input_warp_id)->update_histogram(histogramName, input_data);
@@ -2137,8 +2334,20 @@ public:
         stats_kernels_obj_global_aggr->update_histogram_double(histogramName,input_data);
     }
 
+    void update_histogram_string(unsigned input_warp_id, std::string histogramName, std::string input_data){
+        stats_warps_obj_vector.at(input_warp_id)->update_histogram_string(histogramName, input_data);
+        global_stats_obj->update_histogram_string(histogramName, input_data);
+        stats_kernels_obj_global_aggr->update_histogram_string(histogramName,input_data);
+    }
+
+
+
     void print_histogram(unsigned input_warp_id, std::string histogramName){
         stats_warps_obj_vector.at(input_warp_id)->print_histogram(histogramName);
+    }
+
+    void print_DC_histogram(unsigned input_warp_id, std::string histogramName){
+        stats_warps_obj_vector.at(input_warp_id)->print_PC_Histogram(histogramName);
     }
 
     void print_histogram_global(std::string histogramName){
@@ -2147,6 +2356,10 @@ public:
 
     void print_histogram_global_aggr(std::string histogramName){
         stats_kernels_obj_global_aggr->print_histogram(histogramName);
+    }
+
+    void print_pc_histogram_global_aggr(std::string histogramName){
+        stats_kernels_obj_global_aggr->print_PC_Histogram(histogramName);
     }
 
 

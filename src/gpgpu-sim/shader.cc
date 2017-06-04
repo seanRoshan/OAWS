@@ -1938,10 +1938,21 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
                                  enum cache_request_status status )
 {
 
+    //this->get_smObj();
+
+
+
     if (smObj){
 
-        if (inst.space.is_global()){
+        if (smObj->get_sm_id() != mf->get_sid()) {
+            if (smObj->get_sm_id()< m_config->num_shader() && smObj->get_sm_id()>0 ){
+                printf("DRSVR SM ID : %u ; SHADER ID : %u\n", smObj->get_sm_id() , mf->get_sid());
+            }
+        }
 
+        //assert(smObj->get_sm_id() == mf->get_sid());
+
+        if (inst.space.is_global()){
 
             address_type  blockAddress = m_config->m_L1D_config.block_addr(mf->get_addr());
             unsigned set_index = m_config->m_L1D_config.set_index(blockAddress);
@@ -1976,7 +1987,17 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
                            smObj->get_OCW_value());
                 }
 
-                smObj->update_histogram_double(mf->get_wid(),"H/L Ratio", smObj->global_FCL_obj->getRatio());
+
+                unsigned ratio_num = smObj->global_FCL_obj->getMissCount();
+                unsigned ratio_dom = smObj->global_FCL_obj->getLoadCount();
+
+                std::string ratio_string = std::to_string(ratio_num) + "/" + std::to_string(ratio_dom);
+
+                smObj->update_histogram_string(mf->get_wid(), "M/L Ratio", ratio_string);
+
+                smObj->update_PC_histogram(mf->get_wid(), mf->get_pc(), "MISS_COUNT_DIST", smObj->global_FCL_obj->getMissCount());
+
+                smObj->update_histogram_double(mf->get_wid(), "H/L Ratio", smObj->global_FCL_obj->getRatio());
                 smObj->update_histogram(mf->get_wid(), "MISS_COUNT_DIST", smObj->global_FCL_obj->getMissCount());
                 smObj->update_histogram(mf->get_wid(), "HIT_COUNT_DIST", smObj->global_FCL_obj->getHitCount());
                 smObj->update_histogram(mf->get_wid(), "LOAD_COUNT_DIST", smObj->global_FCL_obj->getLoadCount());
@@ -2345,7 +2366,7 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
     }
 }
 
-ldst_unit::ldst_unit( mem_fetch_interface *icnt,
+/*ldst_unit::ldst_unit( mem_fetch_interface *icnt,
                       shader_core_mem_fetch_allocator *mf_allocator,
                       shader_core_ctx *core, 
                       opndcoll_rfu_t *operand_collector,
@@ -2368,7 +2389,7 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
           stats, 
           sid,
           tpc );
-}
+}*/
 
 void ldst_unit:: issue( register_set &reg_set )
 {
