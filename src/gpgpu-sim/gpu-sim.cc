@@ -864,6 +864,9 @@ void gpgpu_sim::drsvr_printHistogramStats(){
     bool REPLAY_MISS = (m_config.m_shader_config.gpgpu_drsvr_stats_replay_miss== 1 ) ? true : false ;
 
 
+//    this->drsvr_printHistogramSingle("pipe_reg");
+//    printf("\n\n");
+
     if (FCL){
         this->drsvr_printHistogramSingle("FCL");
         printf("\n\n");

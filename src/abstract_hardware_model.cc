@@ -108,7 +108,7 @@ gpgpu_t::gpgpu_t( const gpgpu_functional_sim_config &config )
 address_type line_size_based_tag_func(new_addr_type address, new_addr_type line_size)
 {
    //gives the tag for an address based on a given line size
-    //printf("DRSVR AddressType: address:%u ; lineSize:%u ; ~(line_size)-1:%u \n", address, line_size, ~(line_size-1));
+   //printf("DRSVR AddressType: address:%u ; lineSize:%u ; ~(line_size)-1:%u ; address & ~(line_size-1): %u \n", address, line_size, ~(line_size-1) , address & ~(line_size-1));
    return address & ~(line_size-1);
 }
 
@@ -186,11 +186,10 @@ void warp_inst_t::broadcast_barrier_reduction(const active_mask_t& access_mask)
 
 void warp_inst_t::generate_mem_accesses()
 {
-
     if( empty() || op == MEMORY_BARRIER_OP || m_mem_accesses_created ) 
         return;
     if ( !((op == LOAD_OP) || (op == STORE_OP)) )
-        return; 
+        return;
     if( m_warp_active_mask.count() == 0 ) 
         return; // predicated off
 
@@ -380,6 +379,18 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
 {
     bool DRSVRdebug = false;
 
+
+    /*if (space==global_space){
+        if (is_write){
+            printf("DRSVR WRITE : %u\n", data_size);
+        }
+        else {
+            printf("DRSVR READ : %u\n", data_size);
+        }
+    }*/
+
+    // DRSVR NOTE: Data Size is already set in execute_ptx
+
     // see the CUDA manual where it discusses coalescing rules before reading this
     unsigned segment_size = 0;
     unsigned warp_parts = m_config->mem_warp_parts;
@@ -392,7 +403,12 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
 
     unsigned subwarp_size = m_config->warp_size / warp_parts;
 
-    // This for loop will only run once subwarp = 0 ;
+
+    /*printf("DRSVR subwarp_size:%u ; warp_size:%u ; warp_parts:%u ; segment_size:%u ; data_size:%u ;\n"
+            , subwarp_size, m_config->warp_size, warp_parts, segment_size, data_size);*/
+
+
+    // This for loop will only run once subwarp = 0 since the warp_parts is 0;
     for( unsigned subwarp=0; subwarp <  warp_parts; subwarp++ ) {
 
         std::map<new_addr_type,transaction_info> subwarp_transactions;
@@ -426,10 +442,12 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
 
                 new_addr_type addr = m_per_scalar_thread[thread].memreqaddr[access];
 
-                // Will make offset bits zero [The first 7 bits]
+                // Will make offset bits zero [The first 7 bits or 5 bits]
                 unsigned block_address = line_size_based_tag_func(addr,segment_size);
 
                 unsigned chunk = (addr&127)/32; // which 32-byte chunk within in a 128-byte chunk does this thread access?
+
+                //printf ("(addr&127) : %u ; chunk : %u \n", (addr&127), chunk);
 
                 transaction_info &info = subwarp_transactions[block_address];
 
@@ -438,11 +456,15 @@ void warp_inst_t::memory_coalescing_arch_13( bool is_write, mem_access_type acce
 
                 info.chunks.set(chunk);
                 info.active.set(thread);
+
+
                 unsigned idx = (addr&127);
 
 
                 for( unsigned i=0; i < data_size_coales; i++ )
                     info.bytes.set(idx+i);
+
+                //printf("info.chunks: %s ; info.active: %s info.bytes: %s \n", info.chunks.to_string().c_str(), info.active.to_string().c_str(), info.bytes.to_string().c_str());
             }
         }
 
@@ -882,6 +904,23 @@ void simt_stack::update( simt_mask_t &thread_done, addr_vector_t &next_pc, addre
 
 void core_t::execute_warp_inst_t(warp_inst_t &inst, unsigned warpId)
 {
+    /*bool debugMode = false;
+
+
+    if (inst.op == LOAD_OP){
+        if (inst.active_count() < 5){
+            debugMode = true;
+        }
+    }
+
+    if (debugMode){
+        printf("DRSVR Execute_warp_inst_t Inst: %u ; ActiveCount:%u ; inst.warpId : %u ; warpId : %u mask : %s ;\n"
+                , inst.op , inst.active_count(), inst.warp_id(), warpId , inst.get_active_mask().to_string().c_str()
+        );
+        std::raise(SIGINT);
+    }*/
+
+
 
     for ( unsigned t=0; t < m_warp_size; t++ ) {
         if( inst.active(t) ) {
@@ -909,10 +948,6 @@ void core_t::updateSIMTStack(unsigned warpId, warp_inst_t * inst)
     addr_vector_t next_pc;
     unsigned wtid = warpId * m_warp_size;
 
-    //printf("DRSVR wtid: %u \n", wtid);
-
-
-
     for (unsigned i = 0; i < m_warp_size; i++) {
         if( ptx_thread_done(wtid+i) ) {
             thread_done.set(i);
@@ -924,49 +959,13 @@ void core_t::updateSIMTStack(unsigned warpId, warp_inst_t * inst)
         }
     }
 
-
-
-    /* [DRSVR THREAD PC HISTOGRAM]
-
-    std::vector<unsigned> myHistogram;
-    std::vector<unsigned> myHistoCounter;
-
-    unsigned tempPC;
-    bool matched = false;
-
-    for (unsigned i = 0; i<next_pc.size(); i++){
-
-            tempPC = next_pc.at(i);
-            for (unsigned j = 0; j < myHistogram.size() && (!matched); j++) {
-                    assert(matched==false);
-                    if (myHistogram.at(j)==tempPC) {
-                        myHistoCounter.at(j)++;
-                        matched = true;
-                        break;
-                    }
-            }
-
-            if (!matched) {
-                myHistogram.push_back(next_pc.at(i));
-                myHistoCounter.push_back(1);
-            }
-            else {
-                matched = false;
-            }
-                //printf("DRSVR warp#%u updateSIMTStack  nextPCSize:> %u\n", warpId, next_pc.size());
-                //printf("PC[%u] = %u\n", i, next_pc.at(i));
-    }
-
-    assert(myHistoCounter.size() == myHistogram.size());
-
-    if (myHistoCounter.size()>1) {
-        for (unsigned i=0; i<myHistoCounter.size(); i++){
-            printf("DRSVR warp#%u PC[%u] =  %u\n", warpId, myHistogram.at(i), myHistoCounter.at(i));
+    /*if (inst->op==LOAD_OP && inst->space.is_global()){
+        printf("UPDATE_SIMTSTACK : %d ; PC: %u ; recong PC : %u; next_pc : %u; \n", thread_done.count() , inst->pc , inst->reconvergence_pc, next_pc.size());
+        for (unsigned i=0; i<next_pc.size(); i++){
+            printf("%u\t", next_pc.at(i));
         }
-        printf("--------------------------------------------------\n");
-    }
-
-    */
+        printf("\n");
+    }*/
 
     m_simt_stack[warpId]->update(thread_done,next_pc,inst->reconvergence_pc, inst->op,inst->isize,inst->pc);
 }

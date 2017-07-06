@@ -1118,6 +1118,7 @@ struct dlcEntry {
     unsigned instCounter;
     unsigned accCounter;
     unsigned setCounter;
+    unsigned missCounter;
 
 
     dlcEntry(unsigned input_PC, unsigned accCount, unsigned setCount){
@@ -1128,11 +1129,12 @@ struct dlcEntry {
     }
 
 
-    dlcEntry(unsigned input_PC, unsigned instCount, unsigned accCount, unsigned setCount){
+    dlcEntry(unsigned input_PC, unsigned instCount, unsigned accCount, unsigned setCount, unsigned missCount){
         PC = input_PC;
         instCounter = instCount;
         accCounter = accCount;
         setCounter = setCount;
+        missCounter = missCount;
     }
 
 };
@@ -1155,15 +1157,25 @@ private:
     std::vector<unsigned> transaction_history_vector;
 
 
-    void update_dlc_entry(unsigned input_PC, unsigned input_inst, unsigned input_acc, unsigned input_set){
+    void update_dlc_entry(unsigned input_PC, unsigned input_inst, unsigned input_acc, unsigned input_set, unsigned input_miss){
         dlcTable.at(input_PC)->PC = input_PC;
         dlcTable.at(input_PC)->instCounter+=input_inst;
         dlcTable.at(input_PC)->accCounter+=input_acc;
         dlcTable.at(input_PC)->setCounter+=input_set;
+        if (dlcTable.at(input_PC)->missCounter < input_miss){
+            dlcTable.at(input_PC)->missCounter = input_miss;
+        }
     }
 
     void update_inst(unsigned input_PC) {
         dlcTable.at(input_PC)->instCounter++;
+    }
+
+    void update_miss(unsigned input_PC, unsigned input_miss){
+        if (dlcTable.at(input_PC)->missCounter < input_miss){
+            dlcTable.at(input_PC)->missCounter = input_miss;
+        }
+
     }
 
     void update_acc (unsigned input_PC, unsigned transaction_count){
@@ -1184,6 +1196,10 @@ private:
 
     unsigned get_set (unsigned input_PC){
         return (dlcTable.at(input_PC)->setCounter);
+    }
+
+    unsigned get_missCount (unsigned input_PC){
+        return (dlcTable.at(input_PC)->missCounter);
     }
 
 
@@ -1331,12 +1347,13 @@ public:
             unsigned input_inst = it->second->instCounter;
             unsigned input_acc = it->second->accCounter;
             unsigned input_set = it->second->setCounter;
+            unsigned input_miss = it->second->missCounter;
 
-            input_dlc->backup_DLC_entry(input_pc,input_inst,input_acc,input_set);
+            input_dlc->backup_DLC_entry(input_pc,input_inst,input_acc,input_set,input_miss);
         }
     }
 
-    void update_DLC (unsigned input_pc, std::vector<unsigned> transaction_vector ){
+    /*void update_DLC (unsigned input_pc, std::vector<unsigned> transaction_vector ){
 
         tempPC = input_pc;
 
@@ -1354,34 +1371,34 @@ public:
             dlcEntry *test = new dlcEntry(input_pc, transaction_count, getSetsCount(transaction_vector));
             dlcTable[input_pc] = test;
         }
-    }
+    }*/
 
-    void update_DLC_entry (unsigned input_pc, unsigned input_inst, unsigned input_acc, unsigned input_set ){
+    void update_DLC_entry (unsigned input_pc, unsigned input_inst, unsigned input_acc, unsigned input_set, unsigned input_miss){
 
         tempPC = input_pc;
 
         bool pcFound = findPC(input_pc);
 
         if (pcFound){
-            update_dlc_entry(input_pc, input_inst, input_acc, input_set);
+            update_dlc_entry(input_pc, input_inst, input_acc, input_set, input_miss);
         }
         else {
-            dlcEntry *test = new dlcEntry(input_pc, input_acc, input_set);
+            dlcEntry *test = new dlcEntry(input_pc, input_inst, input_acc, input_set, input_miss);
             dlcTable[input_pc] = test;
         }
     }
 
-    void backup_DLC_entry (unsigned input_pc, unsigned input_inst, unsigned input_acc, unsigned input_set ){
+    void backup_DLC_entry(unsigned input_pc, unsigned input_inst, unsigned input_acc, unsigned input_set, unsigned input_miss){
 
         tempPC = input_pc;
 
         bool pcFound = findPC(input_pc);
 
         if (pcFound){
-            update_dlc_entry(input_pc, input_inst, input_acc, input_set);
+            update_dlc_entry(input_pc, input_inst, input_acc, input_set, input_miss);
         }
         else {
-            dlcEntry *test = new dlcEntry(input_pc, input_inst, input_acc, input_set);
+            dlcEntry *test = new dlcEntry(input_pc, input_inst, input_acc, input_set, input_miss);
             dlcTable[input_pc] = test;
         }
     }
@@ -1448,6 +1465,76 @@ public:
 
     void print_DLC(unsigned sm_id){
 
+        printf("-----------------------------------------------------------------------------------------------------------------------------------------\n");
+        printf("                                             DLC TABLE [%u]\n",sm_id);
+        printf("-----------------------------------------------------------------------------------------------------------------------------------------\n");
+        printf("|           PC           |           #INST           |           #ACC           |           #SETS           |           #MISS           |\n");
+        printf("-----------------------------------------------------------------------------------------------------------------------------------------\n");
+
+        for (std::map<unsigned,dlcEntry*>::iterator it = dlcTable.begin(); it!=dlcTable.end(); ++it){
+
+            // Print PC
+            unsigned numDigit = this->numDigits(it->second->PC);
+            unsigned totalSpace = 2 + 11 ;
+            unsigned whiteSpaces = totalSpace - numDigit;
+
+            printf("|           %u",it->second->PC);
+            for (unsigned i=0; i<whiteSpaces; i++){
+                printf(" ");
+            }
+
+
+            // Print INST
+            numDigit = this->numDigits(it->second->instCounter);
+            totalSpace = 5 + 11 ;
+            whiteSpaces = totalSpace - numDigit;
+
+            printf("|           %u",it->second->instCounter);
+            for (unsigned i=0; i<whiteSpaces; i++){
+                printf(" ");
+            }
+
+            numDigit = this->numDigits(it->second->accCounter);
+            totalSpace = 4 + 11 ;
+            whiteSpaces = totalSpace - numDigit;
+
+            printf("|           %u",it->second->accCounter);
+            for (unsigned i=0; i<whiteSpaces; i++){
+                printf(" ");
+            }
+
+            numDigit = this->numDigits(it->second->setCounter);
+            totalSpace = 5 + 11 ;
+            whiteSpaces = totalSpace - numDigit;
+
+            printf("|           %u",it->second->setCounter);
+            for (unsigned i=0; i<whiteSpaces; i++){
+                printf(" ");
+            }
+
+            numDigit = this->numDigits(it->second->missCounter);
+            totalSpace = 5 + 11 ;
+            whiteSpaces = totalSpace - numDigit;
+
+            printf("|           %u",it->second->missCounter);
+            for (unsigned i=0; i<whiteSpaces; i++){
+                printf(" ");
+            }
+
+            printf("|\n");
+
+            /*printf("|           %u           |           %u           |           %u           |           %u           |\n"
+            ,it->first, it->second->instCounter, it->second->accCounter, it->second->setCounter);*/
+        }
+
+        printf("-----------------------------------------------------------------------------------------------------------------------------------------\n");
+
+    }
+
+
+
+    void print_DLC0(unsigned sm_id){
+
         printf("-------------------------------------------------------------------------------------------------------------\n");
         printf("                                             DLC TABLE [%u]\n",sm_id);
         printf("-------------------------------------------------------------------------------------------------------------\n");
@@ -1505,6 +1592,7 @@ public:
 
     }
 
+
     void print_transactions_history(){
         unsigned setCount_Sum = 0;
         printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n");
@@ -1533,6 +1621,10 @@ public:
 
     unsigned get_TransactionCounts (unsigned input_pc){
         return (get_acc(input_pc));
+    }
+
+    unsigned get_MissCount (unsigned input_pc){
+        return (get_missCount(input_pc));
     }
 
 };
@@ -2455,21 +2547,21 @@ public:
         }
     }
 
-    void update_dlc_table_V2 (unsigned input_warpid, unsigned input_sm_id, unsigned input_pc, std::vector<unsigned> transaction_vector, bool isWrite ){
+/*    void update_dlc_table_V2 (unsigned input_warpid, unsigned input_sm_id, unsigned input_pc, std::vector<unsigned> transaction_vector, bool isWrite ){
         if ( (transaction_vector.size()>1) && (!isWrite)) { // Divergent Load
 
             printf("Divergent Load: Warp ID/ SM ID/PC:[%u;%u;%u] Count:%u\n",input_warpid, input_sm_id, input_pc, transaction_vector.size());
             global_dlc_obj->update_DLC(input_pc, transaction_vector);
         }
-    }
+    }*/
 
-    void update_dlc_table (unsigned input_warpid, unsigned input_sm_id, unsigned input_pc, unsigned input_inst, unsigned input_acc, unsigned input_set, bool isLoad ){
+    void update_dlc_table (unsigned input_warpid, unsigned input_sm_id, unsigned input_pc, unsigned input_inst, unsigned input_acc, unsigned input_set, bool isLoad, unsigned missCount){
 
         assert(isLoad && (input_acc>1));
 
         //printf("Divergent Load: Warp ID/ SM ID/PC:[%u;%u;%u]\t",input_warpid, input_sm_id, input_pc);
         //printf("PC:%u ; INST:%u ; ACC:%u ; SET:%u;\n", input_pc ,input_inst ,input_acc ,input_set);
-        global_dlc_obj->update_DLC_entry(input_pc,input_inst ,input_acc ,input_set);
+        global_dlc_obj->update_DLC_entry(input_pc,input_inst ,input_acc ,input_set, missCount);
 
     }
 
@@ -2555,6 +2647,15 @@ public:
         else {
             //requiredMSHR = 1;
             requiredMSHR = 1 + gto_prio;
+        }
+
+
+        // ADD CAP
+
+        unsigned capMiss = global_dlc_obj->get_MissCount(input_PC);
+
+        if (requiredMSHR > capMiss){
+            requiredMSHR = capMiss;
         }
 
         missPrediction = requiredMSHR;
@@ -2777,8 +2878,9 @@ public:
     }
     void issue( const active_mask_t &mask, unsigned warp_id, unsigned long long cycle, int dynamic_warp_id, unsigned sm_id, DRSVR *drsvrObj)
     {
+        // issue after warp_scheduler
+
         m_warp_active_mask = mask;
-        //printf("DRSVR m_warp_active_mask: %s; \n",mask.to_string().c_str());
         m_warp_issued_mask = mask; 
         m_uid = ++sm_next_uid;
         m_warp_id = warp_id;
@@ -2900,10 +3002,11 @@ public:
         for (std::list<mem_access_t>::iterator it=m_accessq.begin(); it != m_accessq.end(); ++it){
             printf("m_queue[%u]: ",i);
             (*it).print2();
-            printf("\t[%u;%u;%u] Active Mask:%s/%s \n"
+            printf("\t[%u;%u;%u] BlockAddress:%u ;  Active Mask:%s/%s \n"
                     ,m_warp_id
                     ,m_sm_id
                     ,pc
+                    ,(*it).get_addr()
                     ,(*it).get_warp_mask().to_string().c_str()
                     ,m_warp_active_mask.to_string().c_str()
             );
@@ -3100,6 +3203,20 @@ public:
 		assert(0 && "No free registers found");
 		return NULL;
 	}
+
+
+    unsigned getSize(){
+        return regs.size();
+    }
+
+    std::string getName(){
+        std::string unitName = m_name;
+        return unitName;
+    }
+
+    void printInfo(){
+        printf("pipeRegs Size: %u ;  Name: %s\n", regs.size(), m_name);
+    }
 
 private:
 	std::vector<warp_inst_t*> regs;

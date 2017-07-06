@@ -63,6 +63,9 @@ void Scoreboard::reserveRegister(unsigned wid, unsigned regnum)
 	}
     SHADER_DPRINTF( SCOREBOARD,
                     "Reserved Register - warp:%d, reg: %d\n", wid, regnum );
+
+	//printf("Reserved Register - warp:%d, reg: %d\n", wid, regnum);
+
 	reg_table[wid].insert(regnum);
 }
 

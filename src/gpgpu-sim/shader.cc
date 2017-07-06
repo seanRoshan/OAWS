@@ -718,6 +718,7 @@ void shader_core_ctx::fetch()
 
 void shader_core_ctx::func_exec_inst( warp_inst_t &inst )
 {
+    //printf("DRSVR 1 execute_warp_inst_t \t");
     execute_warp_inst_t(inst);
 
     if( inst.is_load() || inst.is_store() )
@@ -730,20 +731,32 @@ void shader_core_ctx::issue_warp( register_set& pipe_reg_set, const warp_inst_t*
 
 
     warp_inst_t** pipe_reg = pipe_reg_set.get_free();
+
+
+    //pipe_reg_set.printInfo();
+    //this->drsvrObj->update_histogram_string(warp_id, "pipe_reg", pipe_reg_set.getName());
+
+
+    //printf("DRSVR pipe_reg_set_size() %u\n", pipe_reg_set.getSize());
+
     assert(pipe_reg);
+    assert(drsvrObj);
 
     m_warp[warp_id].ibuffer_free();
     assert(next_inst->valid());
     **pipe_reg = *next_inst; // static instruction information
 
 
-    assert(drsvrObj);
-
-
     (*pipe_reg)->issue( active_mask, warp_id, gpu_tot_sim_cycle + gpu_sim_cycle, m_warp[warp_id].get_dynamic_warp_id(), m_warp[warp_id].get_sm_id(), drsvrObj ); // dynamic instruction information
 
-    //printf("DRSVR (*pipe_reg)->active_count(): %u ; mask:%s ;\n",(*pipe_reg)->active_count(),active_mask.to_string().c_str());
+    /*printf("DRSVR 1 (*pipe_reg)->active_count(): %u ; mask:%s ; shader_cycle_distro[%u]:%u; \n"
+            , (*pipe_reg)->active_count()
+            , active_mask.to_string().c_str()
+            , 2+(*pipe_reg)->active_count()
+            , m_stats->shader_cycle_distro[2+(*pipe_reg)->active_count()]
+            );*/
 
+    // Act like a histogram to calculate number of active threads for warps
     m_stats->shader_cycle_distro[2+(*pipe_reg)->active_count()]++;
 
     func_exec_inst( **pipe_reg );
@@ -765,7 +778,9 @@ void shader_core_ctx::issue_warp( register_set& pipe_reg_set, const warp_inst_t*
     //printf("DRSVR 1 issue_warp( PC:%u  - PC2:%u\n",next_inst->pc, m_warp[warp_id].get_pc());
 
     updateSIMTStack(warp_id,*pipe_reg);
+
     m_scoreboard->reserveRegisters(*pipe_reg);
+
     m_warp[warp_id].set_next_pc(next_inst->pc + next_inst->isize);
 
     //printf("DRSVR 2 issue_warp( PC:%u  - PC2:%u\n",next_inst->pc, m_warp[warp_id].get_pc());
@@ -1358,6 +1373,10 @@ void scheduler_unit::cycle()
 
                         if ( (pI->op == LOAD_OP) || (pI->op == STORE_OP) || (pI->op == MEMORY_BARRIER_OP) ) {
 
+                            /*if (pI->space.is_global()){
+                                printf("DRSVR Register:  warp_id:%u ; register[0]:%u \n", (*iter)->get_warp_id(), pI->out[0]);
+                            }*/
+
                             if (!(*iter)->oaws_approved() && pI->op==LOAD_OP){
 
                                 assert((*pI).space.get_type()==global_space);
@@ -1795,8 +1814,11 @@ void shader_core_ctx::execute()
 	}
     for( unsigned n=0; n < m_num_function_units; n++ ) {
         unsigned multiplier = m_fu[n]->clock_multiplier();
-        for( unsigned c=0; c < multiplier; c++ )
+        for( unsigned c=0; c < multiplier; c++ ){
+            printf("DRSVR1 execute() SID:%u\n",this->m_sid);
             m_fu[n]->cycle();
+            printf("DRSVR3 execute() SID:%u\n",this->m_sid);
+        }
         m_fu[n]->active_lanes_in_pipeline();
         enum pipeline_stage_name_t issue_port = m_issue_port[n];
         register_set& issue_inst = m_pipeline_reg[ issue_port ];
@@ -1873,6 +1895,7 @@ void shader_core_ctx::warp_inst_complete(const warp_inst_t &inst)
 void shader_core_ctx::writeback()
 {
 
+    printf("DRSVR writeBack()\n");
 	unsigned max_committed_thread_instructions=m_config->warp_size * (m_config->pipe_widths[EX_WB]); //from the functional units
 	m_stats->m_pipeline_duty_cycle[m_sid]=((float)(m_stats->m_num_sim_insn[m_sid]-m_stats->m_last_num_sim_insn[m_sid]))/max_committed_thread_instructions;
 
@@ -1952,8 +1975,6 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
             }
         }
 
-        //assert(smObj->get_sm_id() == mf->get_sid());
-
         if (inst.space.is_global()){
 
             address_type  blockAddress = m_config->m_L1D_config.block_addr(mf->get_addr());
@@ -1974,7 +1995,7 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
                 unsigned ACC = DLCEntry[2];
                 unsigned SET = DLCEntry[3];
 
-                smObj->update_dlc_table(mf->get_wid(), mf->get_sid(), PC ,INST ,ACC ,SET,isLoad);
+                smObj->update_dlc_table(mf->get_wid(), mf->get_sid(), PC ,INST ,ACC ,SET,isLoad, smObj->global_FCL_obj->getMissCount());
                 smObj->updateOCW(FCLstatus, SET, ACC);
 
                 bool debugMode = DRSVRdebug || m_config->drsvr_stats_runtime_ocw_estimation;
@@ -2070,8 +2091,14 @@ mem_stage_stall_type ldst_unit::process_memory_access_queue( cache_t *cache, war
 
     //const mem_access_t &access = inst.accessq_back();
 
-    // DRSVR Print Accessq
-    // if (m_sid==5) { inst.accessq_print(); }
+     //DRSVR Print Accessq
+
+    inst.accessq_print();
+
+     /*if (m_sid==5) {
+         inst.accessq_print(); }*/
+
+
 
     mem_fetch *mf = m_mf_allocator->alloc(inst,inst.accessq_back());
 
@@ -2422,6 +2449,9 @@ void ldst_unit:: issue( register_set &reg_set )
 
 void ldst_unit::writeback()
 {
+
+    printf("DRSVR 3 WRIEBACK()\n");
+
     // process next instruction that is going to writeback
     if( !m_next_wb.empty() ) {
         if( m_operand_collector->writeback(m_next_wb) ) {
@@ -2541,7 +2571,12 @@ void ldst_unit::issue( register_set &reg_set )
 */
 void ldst_unit::cycle()
 {
+   //std::raise(SIGINT);
+
+   printf("DRSVR2 cycle() SID:%u\n",this->m_sid);
+
    writeback();
+
    m_operand_collector->step();
    for( unsigned stage=0; (stage+1)<m_pipeline_depth; stage++ ) 
        if( m_pipeline_reg[stage]->empty() && !m_pipeline_reg[stage+1]->empty() )
@@ -3947,7 +3982,7 @@ void simt_core_cluster::core_cycle()
 {
     //printf("DRSVR m_core_sim_order_size:%u\n",m_core_sim_order.size());
     for( std::list<unsigned>::iterator it = m_core_sim_order.begin(); it != m_core_sim_order.end(); ++it ) {
-        //printf("DRSVR m_core[%u]\n",it);
+        printf("DRSVR1 m_core[%u]\n",(*it));
         m_core[*it]->cycle();
     }
 

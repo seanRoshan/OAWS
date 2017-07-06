@@ -788,6 +788,12 @@ void ptx_thread_info::ptx_fetch_inst( inst_t &inst ) const
 static unsigned datatype2size( unsigned data_type )
 {
    unsigned data_size;
+
+/*   printf("B8_TYPE: %u ; S8_TYPE: %u ; U8_TYPE: %u ; F32_TYPE: %u ; \n", B8_TYPE, S8_TYPE, U8_TYPE);
+   printf("B16_TYPE: %u ; S16_TYPE: %u ; U16_TYPE: %u ; F16_TYPE: %u ; \n", B16_TYPE, S16_TYPE, U16_TYPE, F16_TYPE);
+   printf("B32_TYPE: %u ; S32_TYPE: %u ; U32_TYPE: %u ; F32_TYPE: %u ; \n", B32_TYPE, S32_TYPE, U32_TYPE, F32_TYPE);
+   printf("B64_TYPE: %u ; S64_TYPE: %u ; U64_TYPE: %u ; F64_TYPE: %u ; BB64_TYPE: %u ; FF64_TYPE: %u ; BB128_TYPE: %u ; \n", B64_TYPE, S64_TYPE, U64_TYPE, F64_TYPE, BB64_TYPE, FF64_TYPE, BB128_TYPE);*/
+
    switch ( data_type ) {
       case B8_TYPE:
       case S8_TYPE:
@@ -837,6 +843,7 @@ void ptx_instruction::pre_decode()
    data_size = 0;
    if ( has_memory_read() || has_memory_write() ) {
       unsigned to_type = get_type();
+      //printf("DRSVR TYPE:%u\n", to_type);
       data_size = datatype2size(to_type);
       memory_op = has_memory_read() ? memory_load : memory_store;
    }
@@ -891,6 +898,8 @@ void ptx_instruction::pre_decode()
             if( num_elem >= 4 ) out[3] = o.reg4_num();
             for (int i = 0; i < num_elem; i++) 
                arch_reg.dst[i] = o.arch_reg_num(i);
+
+
          }
       } else {
          if ( o.is_reg() && !o.is_non_arch_reg() ) {
@@ -1284,6 +1293,7 @@ void ptx_thread_info::ptx_exec_inst( warp_inst_t &inst, unsigned lane_id)
    memory_space_t insn_space = undefined_space;
    _memory_op_t insn_memory_op = no_memory_op;
    unsigned insn_data_size = 0;
+
    if ( (pI->has_memory_read()  || pI->has_memory_write()) ) {
       insn_memaddr = last_eaddr();
       insn_space = last_space();
@@ -1291,6 +1301,7 @@ void ptx_thread_info::ptx_exec_inst( warp_inst_t &inst, unsigned lane_id)
       insn_data_size = datatype2size(to_type);
       insn_memory_op = pI->has_memory_read() ? memory_load : memory_store;
    }
+
 
    if ( pI->get_opcode() == BAR_OP && pI->barrier_op() == RED_OPTION) {
 	   inst.add_callback( lane_id, last_callback().function, last_callback().instruction, this,false /*not atomic*/);
@@ -1364,6 +1375,9 @@ void ptx_thread_info::ptx_exec_inst( warp_inst_t &inst, unsigned lane_id)
    // "Return values"
    if(!skip) {
       inst.space = insn_space;
+       /*if (inst.space == global_space){
+           printf("GLOBAL ADDRESS : %u ; Lane_id : %u Active_Mask: %s\n", insn_memaddr, lane_id, inst.get_active_mask().to_string().c_str());
+       }*/
       inst.set_addr(lane_id, insn_memaddr);
       inst.data_size = insn_data_size; // simpleAtomicIntrinsics
       assert( inst.memory_op == insn_memory_op );
