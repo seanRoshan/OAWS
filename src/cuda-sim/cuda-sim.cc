@@ -774,7 +774,6 @@ void ptx_instruction::set_opcode_and_latency()
    }
 	set_fp_or_int_archop();
 	set_mul_div_or_other_archop();
-
 }
 
 void ptx_thread_info::ptx_fetch_inst( inst_t &inst ) const

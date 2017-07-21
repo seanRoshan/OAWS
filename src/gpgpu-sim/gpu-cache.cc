@@ -162,16 +162,11 @@ void tag_array::init( int core_id, int type_id )
 enum cache_request_status tag_array::probe( new_addr_type addr, unsigned &idx ) const {
     //assert( m_config.m_write_policy == READ_ONLY );
 
-    //printf("DRSVR Probe Tag Array!\n");
-
-
     unsigned set_index = m_config.set_index(addr);
-
-    //printf("DRSVR Probe Tag Array! Addr = %u ; DRSVR set_index = %u ;\n", addr, set_index);
 
     new_addr_type tag = m_config.tag(addr);
 
-    //printf("DRSVR BLOCK_ADDR: %u ; set_index:%u ; tag: %u ; m_config.m_assoc:%u ;\n" ,addr ,set_index, tag, m_config.m_assoc);
+
 
     unsigned invalid_line = (unsigned)-1;
     unsigned valid_line = (unsigned)-1;
@@ -182,7 +177,22 @@ enum cache_request_status tag_array::probe( new_addr_type addr, unsigned &idx ) 
     // check for hit or pending hit
 
     for (unsigned way=0; way<m_config.m_assoc; way++) {
+
+        // Convert address to index
+        // DRSVR BLOCK_ADDR: 2147616384 ; set_index:5 ; tag: 2147616384 ; m_config.m_assoc:4 ; m_nset:32 ;
+        // 0  | 0   1   2   3
+        // 1  | 4   5   6   7
+        // 2  | 8   9   10  11
+        // 3  | 12  13  14  15
+        // 4  | 16  17  18  19
+        // 5  | 20  21  22  23 # index can be one of these, we can hit or miss
+        // ...
+        // 31 | 124 125 126 127
+
         unsigned index = set_index*m_config.m_assoc+way;
+
+        /*if (m_config.m_nset > 4)
+            printf("DRSVR BLOCK_ADDR: %u ; set_index:%u ; tag: %u ; m_config.m_assoc:%u ; m_nset:%u ; index:%u ;\n" ,addr ,set_index, tag, m_config.m_assoc, m_config.m_nset, index);*/
 
         cache_block_t *line = &m_lines[index];
 
@@ -203,6 +213,7 @@ enum cache_request_status tag_array::probe( new_addr_type addr, unsigned &idx ) 
                 assert( line->m_status == INVALID );
             }
         }
+
         if (line->m_status != RESERVED) {
             all_reserved = false;
             if (line->m_status == INVALID) {
@@ -225,7 +236,7 @@ enum cache_request_status tag_array::probe( new_addr_type addr, unsigned &idx ) 
     }
     if ( all_reserved ) {
         assert( m_config.m_alloc_policy == ON_MISS );
-        //printf("DRSVR RESERVATION_FAIL: BLOCK_ADDR: %u ; tag: %u ; set_index:%u ; index:%u;\n", addr, tag, set_index);
+        //printf("DRSVR BURST RESERVATION_FAIL: BLOCK_ADDR: %u ; tag: %u ; set_index:%u ; index:%u;\n", addr, tag, set_index);
         return RESERVATION_FAIL; // miss and not enough space in cache to allocate on miss
     }
 
@@ -256,8 +267,11 @@ enum cache_request_status tag_array::access( new_addr_type addr, unsigned time, 
 enum cache_request_status tag_array::access( new_addr_type addr, unsigned time, unsigned &idx, bool &wb, cache_block_t &evicted ) 
 {
     m_access++;
+
     shader_cache_access_log(m_core_id, m_type_id, 0); // log accesses to cache
+
     enum cache_request_status status = probe(addr,idx);
+
     switch (status) {
     case HIT_RESERVED: 
         m_pending_hit++;
@@ -509,7 +523,6 @@ void mshr_table::print2() const{
         smObj->print_dlc_table();
     }
 
-
     printf("----------------------------------------------------------------------\n");
     printf("DRSVR 4 MSHR contents Size:%u\n", m_data.size());
     printf("----------------------------------------------------------------------");
@@ -524,8 +537,6 @@ void mshr_table::print2() const{
             printf(" no memory requests???\n");
         }
     }
-
-    printf("\nDRSVR OK HERE!\n");
 
     //printf("----------------------------------------------------------------------\n");
 }
@@ -824,8 +835,9 @@ bool baseline_cache::bandwidth_management::fill_port_free() const
 
 /// Sends next request to lower level of memory
 void baseline_cache::cycle(){
-    //printf(" CYCLE UNIT!\n");
-    //printf("%s\n",m_name.c_str());
+
+    //printf("DRSVR4 %s baseline_cache::cycle(); MissQueue Size: %u; data_port_free:%u ; fill_port_free:%u ;\n", m_name.c_str(), m_miss_queue.size(), m_bandwidth_management.data_port_free(), m_bandwidth_management.fill_port_free());
+
     if ( !m_miss_queue.empty() ) {
         mem_fetch *mf = m_miss_queue.front();
         if ( !m_memport->full(mf->size(),mf->get_is_write()) ) {
@@ -1104,7 +1116,6 @@ data_cache::wr_miss_wa( new_addr_type addr,
                         unsigned time, std::list<cache_event> &events,
                         enum cache_request_status status )
 {
-    //printf("DRSVR wr_miss_wa!\n");
     new_addr_type block_addr = m_config.block_addr(addr);
 
     // Write allocate, maximum 3 requests (write miss, read request, write back request)
@@ -1252,7 +1263,6 @@ read_only_cache::access( new_addr_type addr,
                          unsigned time,
                          std::list<cache_event> &events )
 {
-    //printf("DRSVR READ_ONLY CACHE ACCESS \n");
     assert( mf->get_data_size() <= m_config.get_line_sz());
     assert(m_config.m_write_policy == READ_ONLY);
     assert(!mf->get_is_write());
@@ -1297,9 +1307,6 @@ data_cache::process_tag_probe( bool wr,
     // options. Function pointers were used to avoid many long conditional
     // branches resulting from many cache configuration options.
 
-
-    //printf("DRSVR PROCESS TAG PROBE! \t");
-
     cache_request_status access_status = probe_status;
 
     if(wr){ // Write
@@ -1340,16 +1347,13 @@ data_cache::access( new_addr_type addr,
                     unsigned time,
                     std::list<cache_event> &events )
 {
-    // DRSVR
-    //printf("ACCESS! \n");
-    //mf->print2();
-
-    
-
     assert( mf->get_data_size() <= m_config.get_line_sz());
+
     bool wr = mf->get_is_write();
 
+
     new_addr_type block_addr = m_config.block_addr(addr);
+
     unsigned cache_index = (unsigned)-1;
 
     enum cache_request_status probe_status
@@ -1371,8 +1375,6 @@ l1_cache::access( new_addr_type addr,
                   unsigned time,
                   std::list<cache_event> &events )
 {
-    //printf("-----------------------------------------------------------------\n");
-    //printf("DRSVR L1 CACHE ");
     return data_cache::access( addr, mf, time, events );
 }
 
@@ -1397,6 +1399,9 @@ l2_cache::access( new_addr_type addr,
 enum cache_request_status tex_cache::access( new_addr_type addr, mem_fetch *mf,
     unsigned time, std::list<cache_event> &events )
 {
+
+    printf("cache_request_status tex_cache::access()\t");
+
     if ( m_fragment_fifo.full() || m_request_fifo.full() || m_rob.full() )
         return RESERVATION_FAIL;
 
@@ -1429,6 +1434,9 @@ enum cache_request_status tex_cache::access( new_addr_type addr, mem_fetch *mf,
 }
 
 void tex_cache::cycle(){
+
+    //printf("DRSVR %s tex_cache::cycle();\n", m_name.c_str());
+
     //printf(" CYCLE UNIT!\n");
     // send next request to lower level of memory
     if ( !m_request_fifo.empty() ) {

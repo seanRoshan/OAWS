@@ -31,6 +31,10 @@
 // Forward declarations
 class gpgpu_sim;
 class kernel_info_t;
+class MPRB;
+class DRSVR;
+
+class warp_inst_t;
 
 //Set a hard limit of 32 CTAs per shader [cuda only has 8]
 #define MAX_CTA_PER_SHADER 32
@@ -68,6 +72,8 @@ enum FuncCache
 #include <csignal>
 #include <bitset>
 #include <math.h>
+#include <sstream>
+
 
 typedef unsigned long long new_addr_type;
 typedef unsigned address_type;
@@ -113,6 +119,7 @@ enum uarch_operand_type_t {
     INT_OP,
     FP_OP
 };
+
 typedef enum uarch_operand_type_t types_of_operands;
 
 enum special_operations_t {
@@ -130,6 +137,8 @@ enum special_operations_t {
 	FP_SIN_OP,
 	FP_EXP_OP
 };
+
+
 typedef enum special_operations_t special_ops; // Required to identify for the power model
 enum operation_pipeline_t {
     UNKOWN_OP,
@@ -2330,38 +2339,892 @@ public:
 
 
 
+
+
+
+
+
+
+
+
+class inst_t {
+public:
+
+    unsigned  DRSVR_COALESCE;
+
+    DRSVR *smObj;
+
+    inst_t()
+    {
+        m_decoded=false;
+        pc=(address_type)-1;
+        reconvergence_pc=(address_type)-1;
+        op=NO_OP;
+        bar_type=NOT_BAR;
+        red_type=NOT_RED;
+        bar_id=(unsigned)-1;
+        bar_count=(unsigned)-1;
+        oprnd_type=UN_OP;
+        sp_op=OTHER_OP;
+        op_pipe=UNKOWN_OP;
+        mem_op=NOT_TEX;
+        num_operands=0;
+        num_regs=0;
+        memset(out, 0, sizeof(unsigned));
+        memset(in, 0, sizeof(unsigned));
+        is_vectorin=0;
+        is_vectorout=0;
+        space = memory_space_t();
+        cache_op = CACHE_UNDEFINED;
+        latency = 1;
+        initiation_interval = 1;
+        for( unsigned i=0; i < MAX_REG_OPERANDS; i++ ) {
+            arch_reg.src[i] = -1;
+            arch_reg.dst[i] = -1;
+        }
+        isize=0;
+    }
+    bool valid() const { return m_decoded; }
+
+    virtual void print_insn( FILE *fp ) const
+    {
+        fprintf(fp," [inst @ pc=0x%04x] ", pc );
+    }
+    virtual void print_insn2( ) const {
+        printf(" [inst @ pc=0x%04x] ", pc );
+    }
+    bool is_load() const { return (op == LOAD_OP || memory_op == memory_load); }
+    bool is_store() const { return (op == STORE_OP || memory_op == memory_store); }
+    unsigned get_num_operands() const {return num_operands;}
+    unsigned get_num_regs() const {return num_regs;}
+    void set_num_regs(unsigned num) {num_regs=num;}
+    void set_num_operands(unsigned num) {num_operands=num;}
+    void set_bar_id(unsigned id) {bar_id=id;}
+    void set_bar_count(unsigned count) {bar_count=count;}
+
+    address_type pc;        // program counter address of instruction
+    unsigned isize;         // size of instruction in bytes
+    op_type op;             // opcode (uarch visible)
+
+    barrier_type bar_type;
+    reduction_type red_type;
+    unsigned bar_id;
+    unsigned bar_count;
+
+    types_of_operands oprnd_type;     // code (uarch visible) identify if the operation is an interger or a floating point
+    special_ops sp_op;           // code (uarch visible) identify if int_alu, fp_alu, int_mul ....
+    operation_pipeline op_pipe;  // code (uarch visible) identify the pipeline of the operation (SP, SFU or MEM)
+    mem_operation mem_op;        // code (uarch visible) identify memory type
+    _memory_op_t memory_op; // memory_op used by ptxplus
+    unsigned num_operands;
+    unsigned num_regs; // count vector operand as one register operand
+
+    address_type reconvergence_pc; // -1 => not a branch, -2 => use function return address
+
+    unsigned out[4];
+    unsigned in[4];
+    unsigned char is_vectorin;
+    unsigned char is_vectorout;
+    int pred; // predicate register number
+    int ar1, ar2;
+    // register number for bank conflict evaluation
+    struct {
+        int dst[MAX_REG_OPERANDS];
+        int src[MAX_REG_OPERANDS];
+    } arch_reg;
+    //int arch_reg[MAX_REG_OPERANDS]; // register number for bank conflict evaluation
+    unsigned latency; // operation latency
+    unsigned initiation_interval;
+
+    unsigned data_size; // what is the size of the word being operated on?
+    memory_space_t space;
+    cache_operator_type cache_op;
+
+protected:
+    bool m_decoded;
+    virtual void pre_decode() {}
+};
+
+enum divergence_support_t {
+   POST_DOMINATOR = 1,
+   NUM_SIMD_MODEL
+};
+
+const unsigned MAX_ACCESSES_PER_INSN_PER_THREAD = 8;
+
+class warp_inst_t: public inst_t {
+public:
+    // constructors
+    warp_inst_t()
+    {
+        m_uid=0;
+        m_empty=true;
+        m_config=NULL;
+        DRSVR_COALESCE = 0;
+        //drsvrObj = tempObj;
+    }
+    warp_inst_t( const core_config *config)
+    {
+        m_uid=0;
+        assert(config->warp_size<=MAX_WARP_SIZE);
+        m_config=config;
+        //drsvrObj = tempObj;
+        m_empty=true;
+        m_isatomic=false;
+        m_per_scalar_thread_valid=false;
+        m_mem_accesses_created=false;
+        m_cache_hit=false;
+        m_is_printf=false;
+        DRSVR_COALESCE = 0;
+        initil_issue = true;
+    }
+    virtual ~warp_inst_t(){
+        //printf("DRSVR! %u\n", DRSVR_COALESCE);
+    }
+
+    // modifiers
+    void broadcast_barrier_reduction( const active_mask_t& access_mask);
+    void do_atomic(bool forceDo=false);
+    void do_atomic( const active_mask_t& access_mask, bool forceDo=false );
+    void clear()
+    {
+        m_empty=true;
+    }
+    void issue( const active_mask_t &mask, unsigned warp_id, unsigned long long cycle, int dynamic_warp_id, unsigned sm_id, DRSVR *drsvrObj)
+    {
+        // issue after warp_scheduler
+        m_warp_active_mask = mask;
+        m_warp_issued_mask = mask;
+        m_uid = ++sm_next_uid;
+        m_warp_id = warp_id;
+        m_dynamic_warp_id = dynamic_warp_id;
+        m_sm_id = sm_id;
+        issue_cycle = cycle;
+        cycles = initiation_interval;
+        m_cache_hit=false;
+        m_empty=false;
+        smObj = drsvrObj;
+    }
+    const active_mask_t & get_active_mask() const
+    {
+    	return m_warp_active_mask;
+    }
+    void completed( unsigned long long cycle ) const;  // stat collection: called when the instruction is completed
+
+    void set_addr( unsigned n, new_addr_type addr )
+    {
+        if( !m_per_scalar_thread_valid ) {
+            m_per_scalar_thread.resize(m_config->warp_size);
+            m_per_scalar_thread_valid=true;
+        }
+        m_per_scalar_thread[n].memreqaddr[0] = addr;
+    }
+    void set_addr( unsigned n, new_addr_type* addr, unsigned num_addrs )
+    {
+        if( !m_per_scalar_thread_valid ) {
+            m_per_scalar_thread.resize(m_config->warp_size);
+            m_per_scalar_thread_valid=true;
+        }
+        assert(num_addrs <= MAX_ACCESSES_PER_INSN_PER_THREAD);
+        for(unsigned i=0; i<num_addrs; i++)
+            m_per_scalar_thread[n].memreqaddr[i] = addr[i];
+    }
+
+    struct transaction_info {
+        std::bitset<4> chunks; // bitmask: 32-byte chunks accessed
+        mem_access_byte_mask_t bytes;
+        active_mask_t active; // threads in this transaction
+
+        bool test_bytes(unsigned start_bit, unsigned end_bit) {
+           for( unsigned i=start_bit; i<=end_bit; i++ )
+              if(bytes.test(i))
+                 return true;
+           return false;
+        }
+    };
+
+    void generate_mem_accesses();
+    void memory_coalescing_arch_13( bool is_write, mem_access_type access_type );
+    void memory_coalescing_arch_13_atomic( bool is_write, mem_access_type access_type );
+    void memory_coalescing_arch_13_reduce_and_send( bool is_write, mem_access_type access_type, const transaction_info &info, new_addr_type addr, unsigned segment_size );
+
+    void add_callback( unsigned lane_id,
+                       void (*function)(const class inst_t*, class ptx_thread_info*),
+                       const inst_t *inst,
+                       class ptx_thread_info *thread,
+                       bool atomic)
+    {
+        if( !m_per_scalar_thread_valid ) {
+            m_per_scalar_thread.resize(m_config->warp_size);
+            m_per_scalar_thread_valid=true;
+            if(atomic) m_isatomic=true;
+        }
+        m_per_scalar_thread[lane_id].callback.function = function;
+        m_per_scalar_thread[lane_id].callback.instruction = inst;
+        m_per_scalar_thread[lane_id].callback.thread = thread;
+    }
+    void set_active( const active_mask_t &active );
+
+    void clear_active( const active_mask_t &inactive );
+    void set_not_active( unsigned lane_id );
+
+    // accessors
+    virtual void print_insn(FILE *fp) const
+    {
+        fprintf(fp," [inst @ pc=0x%04x] ", pc );
+        for (int i=(int)m_config->warp_size-1; i>=0; i--)
+            fprintf(fp, "%c", ((m_warp_active_mask[i])?'1':'0') );
+    }
+    bool active( unsigned thread ) const { return m_warp_active_mask.test(thread); }
+    unsigned active_count() const { return m_warp_active_mask.count(); }
+    unsigned issued_count() const { assert(m_empty == false); return m_warp_issued_mask.count(); }  // for instruction counting
+    bool empty() const { return m_empty; }
+    unsigned warp_id() const
+    {
+        assert( !m_empty );
+        return m_warp_id;
+    }
+
+    unsigned get_warp_id() const
+    {
+        if (m_empty){
+            return -1;
+        }
+        else {
+            return m_warp_id;
+        }
+    }
+
+    unsigned dynamic_warp_id() const
+    {
+        assert( !m_empty );
+        return m_dynamic_warp_id;
+    }
+    bool has_callback( unsigned n ) const
+    {
+        return m_warp_active_mask[n] && m_per_scalar_thread_valid &&
+            (m_per_scalar_thread[n].callback.function!=NULL);
+    }
+    new_addr_type get_addr( unsigned n ) const
+    {
+        assert( m_per_scalar_thread_valid );
+        return m_per_scalar_thread[n].memreqaddr[0];
+    }
+
+    bool isatomic() const { return m_isatomic; }
+
+    unsigned warp_size() const { return m_config->warp_size; }
+
+    bool accessq_empty() const { return m_accessq.empty(); }
+    unsigned accessq_count() const { return m_accessq.size(); }
+    const mem_access_t &accessq_back() { return m_accessq.back(); }
+    void accessq_pop_back() { m_accessq.pop_back(); }
+
+    void accessq_print(){
+        unsigned i = 0;
+        printf("\n-------------------------- Memory Access Queue  SIZE:%u---------------------------\n",m_accessq.size());
+        for (std::list<mem_access_t>::iterator it=m_accessq.begin(); it != m_accessq.end(); ++it){
+            printf("m_queue[%u]: ",i);
+            (*it).print2();
+            printf("\t[%u;%u;%u] ; Active Mask:%s/%s \n"
+                    ,m_warp_id
+                    ,m_sm_id
+                    ,pc
+                    ,(*it).get_warp_mask().to_string().c_str()
+                    ,m_warp_active_mask.to_string().c_str()
+            );
+            i++;
+
+        }
+        printf("------------------------------------------------------------------------------------\n");
+    }
+
+
+    void warp_inst_t_print(bool info, bool out_regs, bool in_regs, bool args, const char * warp_register_name){
+
+        if (info){
+            printf("------------------------------------------------------------------------------------\n");
+            printf("%s\n[%u;%u;%u] ; op : %s ; oprnd_type : %s \n"
+                           "interval: %u ; latency: %u ; num_regs_%u; num_operand:%u ; \n"
+                    , warp_register_name
+                    , m_warp_id, m_sm_id, pc, this->get_uarch_op_t_string(op), this->get_uarch_op_t_string(oprnd_type)
+                    , initiation_interval, latency, num_regs, num_operands
+            );
+        }
+
+
+        if (out_regs) {
+            for (unsigned i=0; i<4; i++){
+                printf("OUT[%u] = %u\t", i, out[i]);
+            }
+            printf("\n");
+        }
+
+        if (in_regs){
+            for (unsigned i=0; i<4; i++){
+                printf("IN[%u] = %u\t", i, in[i]);
+            }
+            printf("\n");
+        }
+
+        if (args){
+            printf("pred: %u ;\t ar1: %u ; \t ; ar2: %u ;\n", pred, ar1, ar2);
+            printf("------------------------------------------------------------------------------------\n");
+        }
+    }
+
+
+    const char* get_special_operations_t_string (unsigned special_operations_t) {
+
+        const char *operation_Names[] = {
+                "OTHER_OP",
+                "INT__OP",
+                "INT_MUL24_OP",
+                "INT_MUL32_OP",
+                "INT_MUL_OP",
+                "INT_DIV_OP",
+                "FP_MUL_OP",
+                "FP_DIV_OP",
+                "FP__OP",
+                "FP_SQRT_OP",
+                "FP_LG_OP",
+                "FP_SIN_OP",
+                "FP_EXP_OP"
+        };
+
+        return (operation_Names[special_operations_t]);
+    }
+
+
+    const char* get_uarch_op_t_string (unsigned uarch_op_t) {
+
+        if (uarch_op_t == -1){
+            return "NO_OP";
+        }
+
+        const char *operation_Names[] = {
+                "NO_OP",
+                "ALU_OP",
+                "SFU_OP",
+                "ALU_SFU_OP",
+                "LOAD_OP",
+                "STORE_OP",
+                "BRANCH_OP",
+                "BARRIER_OP",
+                "MEMORY_BARRIER_OP",
+                "CALL_OPS",
+                "RET_OPS"
+        };
+
+        return (operation_Names[uarch_op_t]);
+    }
+
+
+    const char* get_memory_space_t (unsigned memory_space_t) {
+
+        const char *space_names[] = {
+                "undefined_space",
+                "reg_space",
+                "local_space",
+                "shared_space",
+                "param_space_unclassified",
+                "param_space_kernel",  /* global to all threads in a kernel : read-only */
+                "param_space_local",   /* local to a thread : read-writable */
+                "const_space",
+                "tex_space",
+                "surf_space",
+                "global_space",
+                "generic_space",
+                "instruction_space"
+        };
+
+        return (space_names[memory_space_t]);
+    }
+
+    const char* get_uarch_operand_type_t_string (unsigned uarch_operand_type_t) {
+
+        if (uarch_operand_type_t == -1){
+            return "UN_OP";
+        }
+
+        const char *uarch_operand_type_t_names[] = {
+                "UN_OP",
+                "INT_OP",
+                "FP_OP"
+        };
+
+        return (uarch_operand_type_t_names[uarch_operand_type_t]);
+    }
+
+    bool dispatch_delay()
+    {
+        if( cycles > 0 )
+            cycles--;
+        return cycles > 0;
+    }
+
+    bool has_dispatch_delay(){
+    	return cycles > 0;
+    }
+
+    void print( FILE *fout ) const;
+    unsigned get_uid() const { return m_uid; }
+
+
+
+    void setInitial_issue(){
+        initil_issue = true;
+    }
+
+    void resetInitial_issue(){
+        initil_issue = false;
+    }
+
+    bool isInitial(){
+        return initil_issue;
+    }
+
+
+protected:
+
+    unsigned m_uid;
+    bool m_empty;
+    bool m_cache_hit;
+    unsigned long long issue_cycle;
+    unsigned cycles; // used for implementing initiation interval delay
+    bool m_isatomic;
+    bool m_is_printf;
+    unsigned m_warp_id;
+    unsigned m_dynamic_warp_id;
+    unsigned m_sm_id;
+    const core_config *m_config;
+    active_mask_t m_warp_active_mask; // dynamic active mask for timing model (after predication)
+    active_mask_t m_warp_issued_mask; // active mask at issue (prior to predication test) -- for instruction counting
+
+    struct per_thread_info {
+        per_thread_info() {
+            for(unsigned i=0; i<MAX_ACCESSES_PER_INSN_PER_THREAD; i++)
+                memreqaddr[i] = 0;
+        }
+        dram_callback_t callback;
+        new_addr_type memreqaddr[MAX_ACCESSES_PER_INSN_PER_THREAD]; // effective address, upto 8 different requests (to support 32B access in 8 chunks of 4B each)
+    };
+    bool m_per_scalar_thread_valid;
+    std::vector<per_thread_info> m_per_scalar_thread;
+    bool m_mem_accesses_created;
+
+    std::list<mem_access_t> m_accessq;
+
+    static unsigned sm_next_uid;
+
+
+    bool initil_issue;
+
+
+
+};
+
+void move_warp( warp_inst_t *&dst, warp_inst_t *&src );
+
+size_t get_kernel_code_size( class function_info *entry );
+
+/*
+ * This abstract class used as a base for functional and performance and simulation, it has basic functional simulation
+ * data structures and procedures. 
+ */
+class core_t {
+    public:
+        core_t( gpgpu_sim *gpu, 
+                kernel_info_t *kernel,
+                unsigned warp_size,
+                unsigned threads_per_shader )
+            : m_gpu( gpu ),
+              m_kernel( kernel ),
+              m_simt_stack( NULL ),
+              m_thread( NULL ),
+              m_warp_size( warp_size )
+        {
+            m_warp_count = threads_per_shader/m_warp_size;
+            // Handle the case where the number of threads is not a
+            // multiple of the warp size
+            if ( threads_per_shader % m_warp_size != 0 ) {
+                m_warp_count += 1;
+            }
+            assert( m_warp_count * m_warp_size > 0 );
+            m_thread = ( ptx_thread_info** )
+                     calloc( m_warp_count * m_warp_size,
+                             sizeof( ptx_thread_info* ) );
+            initilizeSIMTStack(m_warp_count,m_warp_size);
+
+            for(unsigned i=0; i<MAX_CTA_PER_SHADER; i++){
+            	for(unsigned j=0; j<MAX_BARRIERS_PER_CTA; j++){
+            		reduction_storage[i][j]=0;
+            	}
+            }
+
+        }
+        virtual ~core_t() { free(m_thread); }
+        virtual void warp_exit( unsigned warp_id ) = 0;
+        virtual bool warp_waiting_at_barrier( unsigned warp_id ) const = 0;
+        virtual void checkExecutionStatusAndUpdate(warp_inst_t &inst, unsigned t, unsigned tid)=0;
+        class gpgpu_sim * get_gpu() {return m_gpu;}
+        void execute_warp_inst_t(warp_inst_t &inst, unsigned warpId =(unsigned)-1);
+        bool  ptx_thread_done( unsigned hw_thread_id ) const ;
+        void updateSIMTStack(unsigned warpId, warp_inst_t * inst);
+        void initilizeSIMTStack(unsigned warp_count, unsigned warps_size);
+        void deleteSIMTStack();
+        warp_inst_t getExecuteWarp(unsigned warpId);
+        void get_pdom_stack_top_info( unsigned warpId, unsigned *pc, unsigned *rpc ) const;
+        kernel_info_t * get_kernel_info(){ return m_kernel;}
+        unsigned get_warp_size() const { return m_warp_size; }
+        void and_reduction(unsigned ctaid, unsigned barid, bool value) { reduction_storage[ctaid][barid] &= value; }
+        void or_reduction(unsigned ctaid, unsigned barid, bool value) { reduction_storage[ctaid][barid] |= value; }
+        void popc_reduction(unsigned ctaid, unsigned barid, bool value) { reduction_storage[ctaid][barid] += value;}
+        unsigned get_reduction_value(unsigned ctaid, unsigned barid) {return reduction_storage[ctaid][barid];}
+    protected:
+        class gpgpu_sim *m_gpu;
+        kernel_info_t *m_kernel;
+        simt_stack  **m_simt_stack; // pdom based reconvergence context for each warp
+        class ptx_thread_info ** m_thread;
+        unsigned m_warp_size;
+        unsigned m_warp_count;
+        unsigned reduction_storage[MAX_CTA_PER_SHADER][MAX_BARRIERS_PER_CTA];
+};
+
+
+//register that can hold multiple instructions.
+class register_set {
+public:
+	register_set(unsigned num, const char* name){
+		for( unsigned i = 0; i < num; i++ ) {
+			regs.push_back(new warp_inst_t());
+		}
+		m_name = name;
+	}
+	bool has_free(){
+		for( unsigned i = 0; i < regs.size(); i++ ) {
+			if( regs[i]->empty() ) {
+				return true;
+			}
+		}
+		return false;
+	}
+	bool has_ready(){
+		for( unsigned i = 0; i < regs.size(); i++ ) {
+			if( not regs[i]->empty() ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void move_in( warp_inst_t *&src ){
+		warp_inst_t** free = get_free();
+		move_warp(*free, src);
+	}
+	//void copy_in( warp_inst_t* src ){
+		//   src->copy_contents_to(*get_free());
+		//}
+	void move_out_to( warp_inst_t *&dest ){
+		warp_inst_t **ready=get_ready();
+		move_warp(dest, *ready);
+	}
+
+	warp_inst_t** get_ready(){
+        //printf("GET READY! regs.size():%u ; name:%s ;\n ",regs.size(), m_name);
+		warp_inst_t** ready;
+		ready = NULL;
+		for( unsigned i = 0; i < regs.size(); i++ ) {
+			if( not regs[i]->empty() ) {
+				if( ready and (*ready)->get_uid() < regs[i]->get_uid() ) {
+					// ready is oldest
+				} else {
+					ready = &regs[i];
+				}
+			}
+		}
+		return ready;
+	}
+
+	void print(FILE* fp) const{
+		fprintf(fp, "%s : @%p\n", m_name, this);
+		for( unsigned i = 0; i < regs.size(); i++ ) {
+			fprintf(fp, "     ");
+			regs[i]->print(fp);
+			fprintf(fp, "\n");
+		}
+	}
+
+    void print2(bool detail) const{
+        for( unsigned i = 0; i < regs.size(); i++ ) {
+            if (detail){
+                if (regs[i]->get_warp_id()!=-1){
+                    printf("--------------------------------------------------------------------------------\n");
+                    printf("reg[%u]:\n", i);
+                    regs[i]->warp_inst_t_print(true, true, true, true, m_name);
+                    if ( regs[i]->accessq_count()>0){
+                        regs[i]->accessq_print();
+                    }
+                    printf("--------------------------------------------------------------------------------\n");
+                }
+            }
+            else {
+                if (regs[i]->get_warp_id()!=-1){
+                    printf("--------------------------------------------------------------------------------\n");
+                    printf("reg[%u] = %u \n", i, regs[i]->get_warp_id());
+                    printf("--------------------------------------------------------------------------------\n");
+                }
+            }
+        }
+    }
+
+	warp_inst_t ** get_free(){
+		for( unsigned i = 0; i < regs.size(); i++ ) {
+			if( regs[i]->empty() ) {
+				return &regs[i];
+			}
+		}
+		assert(0 && "No free registers found");
+		return NULL;
+	}
+
+
+    unsigned getSize(){
+        return regs.size();
+    }
+
+    std::string getName(){
+        std::string unitName = m_name;
+        return unitName;
+    }
+
+    void printInfo(){
+        printf("pipeRegs Size: %u ;  Name: %s\n", regs.size(), m_name);
+    }
+
+private:
+	std::vector<warp_inst_t*> regs;
+	const char* m_name;
+};
+
+
+
+class MPRB{
+
+
+public:
+
+    MPRB(){
+
+        // Input Buffer
+        for (unsigned i = 0; i<inputBufferSize; i++){
+            inputBuffer.push_back(new warp_inst_t());
+        }
+
+        // Warp Queue
+        for (unsigned i = 0; i<warpQueueSize; i++){
+            warpsQueue.push_back(new warp_inst_t());
+        }
+
+        // Transaction Queue
+        transactionsQueue.clear();
+
+    }
+
+
+
+    // Input Buffer Functions
+    bool buffer_has_free(){
+        for( unsigned i = 0; i < inputBuffer.size(); i++ ) {
+            if( inputBuffer[i]->empty() ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool buffer_has_ready(){
+        for( unsigned i = 0; i < inputBuffer.size(); i++ ) {
+            if( not inputBuffer[i]->empty() ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    warp_inst_t** buffer_get_free(){
+        for( unsigned i = 0; i < inputBuffer.size(); i++ ) {
+            if( inputBuffer[i]->empty() ) {
+                return &inputBuffer[i];
+            }
+        }
+        assert(0 && "No free bufferQueue MPRB found!");
+        return NULL;
+    }
+
+    warp_inst_t** buffer_get_ready(){
+        for( unsigned i = 0; i < inputBuffer.size(); i++ ) {
+            if( not inputBuffer[i]->empty() ) {
+                return &inputBuffer[i];
+            }
+        }
+        assert(0 && "No ready bufferQueue MPRB found!");
+        return NULL;
+    }
+
+
+    void fill_in_inputBuffer( warp_inst_t *&src ){
+        warp_inst_t** free = buffer_get_free();
+        move_warp(*free, src);
+    }
+
+
+    void get_out_inputBuffer( warp_inst_t *&dest ){
+        //warp_inst_t **ready=buffer_get_ready();
+        warp_inst_t **ready = &inputBuffer[0];
+        move_warp(dest, *ready);
+        for (unsigned i=0; (i+1)<inputBuffer.size(); i++){
+            if (not inputBuffer[i+1]->empty() ){
+                move_warp(inputBuffer[i], inputBuffer[i+1]);
+                inputBuffer[i+1] = new warp_inst_t();
+            }
+            else {
+                inputBuffer[i] = new warp_inst_t();
+            }
+        }
+    }
+
+
+    void print_inputBuffer(){
+        for (unsigned i=0; i<inputBuffer.size(); i++){
+            std::ostringstream oss;
+            oss << "input_buffer[" << i << "]" ;
+            std::string name = oss.str();
+            inputBuffer[i]->warp_inst_t_print(true,false,false,false, name.c_str());
+        }
+    }
+
+
+    // WarpQueue Buffer Functions
+
+    bool WarpQueue_has_free(){
+        for( unsigned i = 0; i < warpsQueue.size(); i++ ) {
+            if( warpsQueue[i]->empty() ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool WarpQueue_has_ready(){
+        for( unsigned i = 0; i < warpsQueue.size(); i++ ) {
+            if( not warpsQueue[i]->empty() ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    warp_inst_t** WarpQueue_get_free(){
+        for( unsigned i = 0; i < warpsQueue.size(); i++ ) {
+            if( warpsQueue[i]->empty() ) {
+                return &warpsQueue[i];
+            }
+        }
+        assert(0 && "No free bufferQueue MPRB found!");
+        return NULL;
+    }
+
+    warp_inst_t** WarpQueue_ready(){
+        for( unsigned i = 0; i < warpsQueue.size(); i++ ) {
+            if( not warpsQueue[i]->empty() ) {
+                return &warpsQueue[i];
+            }
+        }
+        assert(0 && "No ready bufferQueue MPRB found!");
+        return NULL;
+    }
+
+
+    void fill_in_warpsQueue( warp_inst_t *&src ){
+        warp_inst_t** free = WarpQueue_get_free();
+        move_warp(*free, src);
+    }
+
+    void get_out_warpsQueue( warp_inst_t *&dest ){
+        warp_inst_t **ready=WarpQueue_get_free();
+        move_warp(dest, *ready);
+    }
+
+    void print_warpsQueue(){
+        for (unsigned i=0; i<warpsQueue.size(); i++){
+            std::ostringstream oss;
+            oss << "warpsQueue[" << i << "]" ;
+            std::string name = oss.str();
+            warpsQueue[i]->warp_inst_t_print(true,false,false,false, name.c_str());
+        }
+    }
+
+
+
+
+    enum drainPolicy{
+        FIFO,
+        LQF,
+    };
+
+    enum signature{
+        OAWS,
+        WARP_ID,
+    };
+
+private:
+
+    std::vector<warp_inst_t*> inputBuffer;
+    unsigned inputBufferSize = 2;
+
+    std::vector<warp_inst_t*> warpsQueue;
+    unsigned warpQueueSize = 10;
+
+    std::vector<mem_access_t> transactionsQueue;
+    unsigned transactionQueueSize = 10;
+
+};
+
 class DRSVR{
 
 private:
-        unsigned d_sm_id;
+    unsigned d_sm_id;
 
-        const unsigned warpPerSM = 48;
+    const unsigned warpPerSM = 48;
 
-        std::vector<DRSVRSTATS*> stats_warps_obj_vector;
+    std::vector<DRSVRSTATS*> stats_warps_obj_vector;
 
-        std::vector<std::vector<DRSVRSTATS*> > stats_kernels_obj_vector;
+    std::vector<std::vector<DRSVRSTATS*> > stats_kernels_obj_vector;
 
-        std::vector<DRSVRSTATS*> stats_kernels_obj_global;
+    std::vector<DRSVRSTATS*> stats_kernels_obj_global;
 
 
-        std::vector<DLC*> dlc_obj_vector;
+    std::vector<DLC*> dlc_obj_vector;
 
-        DRSVRSTATS *global_stats_obj;
-        DRSVRSTATS *stats_kernels_obj_global_aggr;
+    DRSVRSTATS *global_stats_obj;
+    DRSVRSTATS *stats_kernels_obj_global_aggr;
 
-        DLC *global_dlc_obj;
-        DLC *global_dlc_obj_aggr;
+    DLC *global_dlc_obj;
+    DLC *global_dlc_obj_aggr;
 
-        OCW_LOGIC *global_ocw_obj;
+    OCW_LOGIC *global_ocw_obj;
 
-        unsigned missOnFlight;
-        unsigned availableMSHR;
-        bool  mshrStatsInitialized = false;
+    unsigned missOnFlight;
+    unsigned availableMSHR;
+    bool  mshrStatsInitialized = false;
 
-        unsigned OCW_VALUE;
-        //bool OCW_VALID;
+    unsigned OCW_VALUE;
+    //bool OCW_VALID;
 
-        unsigned missPrediction;
+    unsigned missPrediction;
 
 
 
@@ -2371,6 +3234,8 @@ public:
 
     FCLUnit *global_FCL_obj;
 
+    MPRB *global_MPRB_obj;
+
     DRSVR(unsigned input_sm_id) {
 
         d_sm_id = input_sm_id;
@@ -2378,12 +3243,14 @@ public:
         //global_stats_obj = new DRSVRSTATS(d_sm_id, warpPerSM);
 
         global_dlc_obj = new DLC(32,5,128);             // DRSVR WARNING: You should add parameters instead of constants
-                                                        // Numbers does not matter anymore since we do not calculate sets manually anymore
+        // Numbers does not matter anymore since we do not calculate sets manually anymore
         global_dlc_obj_aggr = new DLC(32,5,128);
 
         global_ocw_obj = new OCW_LOGIC();
 
         global_FCL_obj = new FCLUnit();
+
+        global_MPRB_obj = new MPRB();
 
         OCW_VALUE = 2;
         //OCW_VALID = false;
@@ -2733,495 +3600,6 @@ public:
 };
 
 
-
-class inst_t {
-public:
-
-    unsigned  DRSVR_COALESCE;
-
-    DRSVR *smObj;
-
-    inst_t()
-    {
-        m_decoded=false;
-        pc=(address_type)-1;
-        reconvergence_pc=(address_type)-1;
-        op=NO_OP;
-        bar_type=NOT_BAR;
-        red_type=NOT_RED;
-        bar_id=(unsigned)-1;
-        bar_count=(unsigned)-1;
-        oprnd_type=UN_OP;
-        sp_op=OTHER_OP;
-        op_pipe=UNKOWN_OP;
-        mem_op=NOT_TEX;
-        num_operands=0;
-        num_regs=0;
-        memset(out, 0, sizeof(unsigned)); 
-        memset(in, 0, sizeof(unsigned)); 
-        is_vectorin=0; 
-        is_vectorout=0;
-        space = memory_space_t();
-        cache_op = CACHE_UNDEFINED;
-        latency = 1;
-        initiation_interval = 1;
-        for( unsigned i=0; i < MAX_REG_OPERANDS; i++ ) {
-            arch_reg.src[i] = -1;
-            arch_reg.dst[i] = -1;
-        }
-        isize=0;
-    }
-    bool valid() const { return m_decoded; }
-
-    virtual void print_insn( FILE *fp ) const
-    {
-        fprintf(fp," [inst @ pc=0x%04x] ", pc );
-    }
-    virtual void print_insn2( ) const {
-        printf(" [inst @ pc=0x%04x] ", pc );
-    }
-    bool is_load() const { return (op == LOAD_OP || memory_op == memory_load); }
-    bool is_store() const { return (op == STORE_OP || memory_op == memory_store); }
-    unsigned get_num_operands() const {return num_operands;}
-    unsigned get_num_regs() const {return num_regs;}
-    void set_num_regs(unsigned num) {num_regs=num;}
-    void set_num_operands(unsigned num) {num_operands=num;}
-    void set_bar_id(unsigned id) {bar_id=id;}
-    void set_bar_count(unsigned count) {bar_count=count;}
-
-    address_type pc;        // program counter address of instruction
-    unsigned isize;         // size of instruction in bytes 
-    op_type op;             // opcode (uarch visible)
-
-    barrier_type bar_type;
-    reduction_type red_type;
-    unsigned bar_id;
-    unsigned bar_count;
-
-    types_of_operands oprnd_type;     // code (uarch visible) identify if the operation is an interger or a floating point
-    special_ops sp_op;           // code (uarch visible) identify if int_alu, fp_alu, int_mul ....
-    operation_pipeline op_pipe;  // code (uarch visible) identify the pipeline of the operation (SP, SFU or MEM)
-    mem_operation mem_op;        // code (uarch visible) identify memory type
-    _memory_op_t memory_op; // memory_op used by ptxplus 
-    unsigned num_operands;
-    unsigned num_regs; // count vector operand as one register operand
-
-    address_type reconvergence_pc; // -1 => not a branch, -2 => use function return address
-    
-    unsigned out[4];
-    unsigned in[4];
-    unsigned char is_vectorin;
-    unsigned char is_vectorout;
-    int pred; // predicate register number
-    int ar1, ar2;
-    // register number for bank conflict evaluation
-    struct {
-        int dst[MAX_REG_OPERANDS];
-        int src[MAX_REG_OPERANDS];
-    } arch_reg;
-    //int arch_reg[MAX_REG_OPERANDS]; // register number for bank conflict evaluation
-    unsigned latency; // operation latency 
-    unsigned initiation_interval;
-
-    unsigned data_size; // what is the size of the word being operated on?
-    memory_space_t space;
-    cache_operator_type cache_op;
-
-protected:
-    bool m_decoded;
-    virtual void pre_decode() {}
-};
-
-enum divergence_support_t {
-   POST_DOMINATOR = 1,
-   NUM_SIMD_MODEL
-};
-
-const unsigned MAX_ACCESSES_PER_INSN_PER_THREAD = 8;
-
-class warp_inst_t: public inst_t {
-public:
-    // constructors
-    warp_inst_t()
-    {
-        m_uid=0;
-        m_empty=true; 
-        m_config=NULL;
-        DRSVR_COALESCE = 0;
-        //drsvrObj = tempObj;
-    }
-    warp_inst_t( const core_config *config)
-    { 
-        m_uid=0;
-        assert(config->warp_size<=MAX_WARP_SIZE); 
-        m_config=config;
-        //drsvrObj = tempObj;
-        m_empty=true; 
-        m_isatomic=false;
-        m_per_scalar_thread_valid=false;
-        m_mem_accesses_created=false;
-        m_cache_hit=false;
-        m_is_printf=false;
-        DRSVR_COALESCE = 0;
-    }
-    virtual ~warp_inst_t(){
-        //printf("DRSVR! %u\n", DRSVR_COALESCE);
-    }
-
-    // modifiers
-    void broadcast_barrier_reduction( const active_mask_t& access_mask);
-    void do_atomic(bool forceDo=false);
-    void do_atomic( const active_mask_t& access_mask, bool forceDo=false );
-    void clear() 
-    { 
-        m_empty=true; 
-    }
-    void issue( const active_mask_t &mask, unsigned warp_id, unsigned long long cycle, int dynamic_warp_id, unsigned sm_id, DRSVR *drsvrObj)
-    {
-        // issue after warp_scheduler
-
-        m_warp_active_mask = mask;
-        m_warp_issued_mask = mask; 
-        m_uid = ++sm_next_uid;
-        m_warp_id = warp_id;
-        m_dynamic_warp_id = dynamic_warp_id;
-        m_sm_id = sm_id;
-        issue_cycle = cycle;
-        cycles = initiation_interval;
-        m_cache_hit=false;
-        m_empty=false;
-        smObj = drsvrObj;
-    }
-    const active_mask_t & get_active_mask() const
-    {
-    	return m_warp_active_mask;
-    }
-    void completed( unsigned long long cycle ) const;  // stat collection: called when the instruction is completed  
-
-    void set_addr( unsigned n, new_addr_type addr ) 
-    {
-        if( !m_per_scalar_thread_valid ) {
-            m_per_scalar_thread.resize(m_config->warp_size);
-            m_per_scalar_thread_valid=true;
-        }
-        m_per_scalar_thread[n].memreqaddr[0] = addr;
-    }
-    void set_addr( unsigned n, new_addr_type* addr, unsigned num_addrs )
-    {
-        if( !m_per_scalar_thread_valid ) {
-            m_per_scalar_thread.resize(m_config->warp_size);
-            m_per_scalar_thread_valid=true;
-        }
-        assert(num_addrs <= MAX_ACCESSES_PER_INSN_PER_THREAD);
-        for(unsigned i=0; i<num_addrs; i++)
-            m_per_scalar_thread[n].memreqaddr[i] = addr[i];
-    }
-
-    struct transaction_info {
-        std::bitset<4> chunks; // bitmask: 32-byte chunks accessed
-        mem_access_byte_mask_t bytes;
-        active_mask_t active; // threads in this transaction
-
-        bool test_bytes(unsigned start_bit, unsigned end_bit) {
-           for( unsigned i=start_bit; i<=end_bit; i++ )
-              if(bytes.test(i))
-                 return true;
-           return false;
-        }
-    };
-
-    void generate_mem_accesses();
-    void memory_coalescing_arch_13( bool is_write, mem_access_type access_type );
-    void memory_coalescing_arch_13_atomic( bool is_write, mem_access_type access_type );
-    void memory_coalescing_arch_13_reduce_and_send( bool is_write, mem_access_type access_type, const transaction_info &info, new_addr_type addr, unsigned segment_size );
-
-    void add_callback( unsigned lane_id, 
-                       void (*function)(const class inst_t*, class ptx_thread_info*),
-                       const inst_t *inst, 
-                       class ptx_thread_info *thread,
-                       bool atomic)
-    {
-        if( !m_per_scalar_thread_valid ) {
-            m_per_scalar_thread.resize(m_config->warp_size);
-            m_per_scalar_thread_valid=true;
-            if(atomic) m_isatomic=true;
-        }
-        m_per_scalar_thread[lane_id].callback.function = function;
-        m_per_scalar_thread[lane_id].callback.instruction = inst;
-        m_per_scalar_thread[lane_id].callback.thread = thread;
-    }
-    void set_active( const active_mask_t &active );
-
-    void clear_active( const active_mask_t &inactive );
-    void set_not_active( unsigned lane_id );
-
-    // accessors
-    virtual void print_insn(FILE *fp) const 
-    {
-        fprintf(fp," [inst @ pc=0x%04x] ", pc );
-        for (int i=(int)m_config->warp_size-1; i>=0; i--)
-            fprintf(fp, "%c", ((m_warp_active_mask[i])?'1':'0') );
-    }
-    bool active( unsigned thread ) const { return m_warp_active_mask.test(thread); }
-    unsigned active_count() const { return m_warp_active_mask.count(); }
-    unsigned issued_count() const { assert(m_empty == false); return m_warp_issued_mask.count(); }  // for instruction counting 
-    bool empty() const { return m_empty; }
-    unsigned warp_id() const 
-    { 
-        assert( !m_empty );
-        return m_warp_id; 
-    }
-    unsigned dynamic_warp_id() const 
-    { 
-        assert( !m_empty );
-        return m_dynamic_warp_id; 
-    }
-    bool has_callback( unsigned n ) const
-    {
-        return m_warp_active_mask[n] && m_per_scalar_thread_valid && 
-            (m_per_scalar_thread[n].callback.function!=NULL);
-    }
-    new_addr_type get_addr( unsigned n ) const
-    {
-        assert( m_per_scalar_thread_valid );
-        return m_per_scalar_thread[n].memreqaddr[0];
-    }
-
-    bool isatomic() const { return m_isatomic; }
-
-    unsigned warp_size() const { return m_config->warp_size; }
-
-    bool accessq_empty() const { return m_accessq.empty(); }
-    unsigned accessq_count() const { return m_accessq.size(); }
-    const mem_access_t &accessq_back() { return m_accessq.back(); }
-    void accessq_pop_back() { m_accessq.pop_back(); }
-
-    void accessq_print(){
-        unsigned i = 0;
-        printf("\n-------------------------- Memory Access Queue  SIZE:%u---------------------------\n",m_accessq.size());
-        for (std::list<mem_access_t>::iterator it=m_accessq.begin(); it != m_accessq.end(); ++it){
-            printf("m_queue[%u]: ",i);
-            (*it).print2();
-            printf("\t[%u;%u;%u] BlockAddress:%u ;  Active Mask:%s/%s \n"
-                    ,m_warp_id
-                    ,m_sm_id
-                    ,pc
-                    ,(*it).get_addr()
-                    ,(*it).get_warp_mask().to_string().c_str()
-                    ,m_warp_active_mask.to_string().c_str()
-            );
-            i++;
-
-        }
-        printf("------------------------------------------------------------------------------------\n");
-    }
-
-    bool dispatch_delay()
-    { 
-        if( cycles > 0 ) 
-            cycles--;
-        return cycles > 0;
-    }
-
-    bool has_dispatch_delay(){
-    	return cycles > 0;
-    }
-
-    void print( FILE *fout ) const;
-    unsigned get_uid() const { return m_uid; }
-
-
-protected:
-
-    unsigned m_uid;
-    bool m_empty;
-    bool m_cache_hit;
-    unsigned long long issue_cycle;
-    unsigned cycles; // used for implementing initiation interval delay
-    bool m_isatomic;
-    bool m_is_printf;
-    unsigned m_warp_id;
-    unsigned m_dynamic_warp_id;
-    unsigned m_sm_id;
-    const core_config *m_config; 
-    active_mask_t m_warp_active_mask; // dynamic active mask for timing model (after predication)
-    active_mask_t m_warp_issued_mask; // active mask at issue (prior to predication test) -- for instruction counting
-
-    struct per_thread_info {
-        per_thread_info() {
-            for(unsigned i=0; i<MAX_ACCESSES_PER_INSN_PER_THREAD; i++)
-                memreqaddr[i] = 0;
-        }
-        dram_callback_t callback;
-        new_addr_type memreqaddr[MAX_ACCESSES_PER_INSN_PER_THREAD]; // effective address, upto 8 different requests (to support 32B access in 8 chunks of 4B each)
-    };
-    bool m_per_scalar_thread_valid;
-    std::vector<per_thread_info> m_per_scalar_thread;
-    bool m_mem_accesses_created;
-
-    std::list<mem_access_t> m_accessq;
-
-    static unsigned sm_next_uid;
-};
-
-void move_warp( warp_inst_t *&dst, warp_inst_t *&src );
-
-size_t get_kernel_code_size( class function_info *entry );
-
-/*
- * This abstract class used as a base for functional and performance and simulation, it has basic functional simulation
- * data structures and procedures. 
- */
-class core_t {
-    public:
-        core_t( gpgpu_sim *gpu, 
-                kernel_info_t *kernel,
-                unsigned warp_size,
-                unsigned threads_per_shader )
-            : m_gpu( gpu ),
-              m_kernel( kernel ),
-              m_simt_stack( NULL ),
-              m_thread( NULL ),
-              m_warp_size( warp_size )
-        {
-            m_warp_count = threads_per_shader/m_warp_size;
-            // Handle the case where the number of threads is not a
-            // multiple of the warp size
-            if ( threads_per_shader % m_warp_size != 0 ) {
-                m_warp_count += 1;
-            }
-            assert( m_warp_count * m_warp_size > 0 );
-            m_thread = ( ptx_thread_info** )
-                     calloc( m_warp_count * m_warp_size,
-                             sizeof( ptx_thread_info* ) );
-            initilizeSIMTStack(m_warp_count,m_warp_size);
-
-            for(unsigned i=0; i<MAX_CTA_PER_SHADER; i++){
-            	for(unsigned j=0; j<MAX_BARRIERS_PER_CTA; j++){
-            		reduction_storage[i][j]=0;
-            	}
-            }
-
-        }
-        virtual ~core_t() { free(m_thread); }
-        virtual void warp_exit( unsigned warp_id ) = 0;
-        virtual bool warp_waiting_at_barrier( unsigned warp_id ) const = 0;
-        virtual void checkExecutionStatusAndUpdate(warp_inst_t &inst, unsigned t, unsigned tid)=0;
-        class gpgpu_sim * get_gpu() {return m_gpu;}
-        void execute_warp_inst_t(warp_inst_t &inst, unsigned warpId =(unsigned)-1);
-        bool  ptx_thread_done( unsigned hw_thread_id ) const ;
-        void updateSIMTStack(unsigned warpId, warp_inst_t * inst);
-        void initilizeSIMTStack(unsigned warp_count, unsigned warps_size);
-        void deleteSIMTStack();
-        warp_inst_t getExecuteWarp(unsigned warpId);
-        void get_pdom_stack_top_info( unsigned warpId, unsigned *pc, unsigned *rpc ) const;
-        kernel_info_t * get_kernel_info(){ return m_kernel;}
-        unsigned get_warp_size() const { return m_warp_size; }
-        void and_reduction(unsigned ctaid, unsigned barid, bool value) { reduction_storage[ctaid][barid] &= value; }
-        void or_reduction(unsigned ctaid, unsigned barid, bool value) { reduction_storage[ctaid][barid] |= value; }
-        void popc_reduction(unsigned ctaid, unsigned barid, bool value) { reduction_storage[ctaid][barid] += value;}
-        unsigned get_reduction_value(unsigned ctaid, unsigned barid) {return reduction_storage[ctaid][barid];}
-    protected:
-        class gpgpu_sim *m_gpu;
-        kernel_info_t *m_kernel;
-        simt_stack  **m_simt_stack; // pdom based reconvergence context for each warp
-        class ptx_thread_info ** m_thread;
-        unsigned m_warp_size;
-        unsigned m_warp_count;
-        unsigned reduction_storage[MAX_CTA_PER_SHADER][MAX_BARRIERS_PER_CTA];
-};
-
-
-//register that can hold multiple instructions.
-class register_set {
-public:
-	register_set(unsigned num, const char* name){
-		for( unsigned i = 0; i < num; i++ ) {
-			regs.push_back(new warp_inst_t());
-		}
-		m_name = name;
-	}
-	bool has_free(){
-		for( unsigned i = 0; i < regs.size(); i++ ) {
-			if( regs[i]->empty() ) {
-				return true;
-			}
-		}
-		return false;
-	}
-	bool has_ready(){
-		for( unsigned i = 0; i < regs.size(); i++ ) {
-			if( not regs[i]->empty() ) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	void move_in( warp_inst_t *&src ){
-		warp_inst_t** free = get_free();
-		move_warp(*free, src);
-	}
-	//void copy_in( warp_inst_t* src ){
-		//   src->copy_contents_to(*get_free());
-		//}
-	void move_out_to( warp_inst_t *&dest ){
-		warp_inst_t **ready=get_ready();
-		move_warp(dest, *ready);
-	}
-
-	warp_inst_t** get_ready(){
-		warp_inst_t** ready;
-		ready = NULL;
-		for( unsigned i = 0; i < regs.size(); i++ ) {
-			if( not regs[i]->empty() ) {
-				if( ready and (*ready)->get_uid() < regs[i]->get_uid() ) {
-					// ready is oldest
-				} else {
-					ready = &regs[i];
-				}
-			}
-		}
-		return ready;
-	}
-
-	void print(FILE* fp) const{
-		fprintf(fp, "%s : @%p\n", m_name, this);
-		for( unsigned i = 0; i < regs.size(); i++ ) {
-			fprintf(fp, "     ");
-			regs[i]->print(fp);
-			fprintf(fp, "\n");
-		}
-	}
-
-	warp_inst_t ** get_free(){
-		for( unsigned i = 0; i < regs.size(); i++ ) {
-			if( regs[i]->empty() ) {
-				return &regs[i];
-			}
-		}
-		assert(0 && "No free registers found");
-		return NULL;
-	}
-
-
-    unsigned getSize(){
-        return regs.size();
-    }
-
-    std::string getName(){
-        std::string unitName = m_name;
-        return unitName;
-    }
-
-    void printInfo(){
-        printf("pipeRegs Size: %u ;  Name: %s\n", regs.size(), m_name);
-    }
-
-private:
-	std::vector<warp_inst_t*> regs;
-	const char* m_name;
-};
 
 #endif // #ifdef __cplusplus
 

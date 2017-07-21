@@ -41,6 +41,7 @@
 #include <utility>
 #include <algorithm>
 #include <deque>
+#include <sstream>
 
 //#include "../cuda-sim/ptx.tab.h"
 
@@ -800,6 +801,7 @@ private:
          reset_alloction();
       }
 
+
       // accessors
       void dump(FILE *fp) const
       {
@@ -855,6 +857,7 @@ private:
          for( unsigned b=0; b < m_num_banks; b++ )
             m_allocated_bank[b].reset();
       }
+
 
    private:
       unsigned m_num_banks;
@@ -1071,18 +1074,34 @@ public:
     ~simd_function_unit() { delete m_dispatch_reg; }
 
     // modifiers
-    virtual void issue( register_set& source_reg ) { source_reg.move_out_to(m_dispatch_reg); occupied.set(m_dispatch_reg->latency);}
+    virtual void issue( register_set& source_reg ) {
+        source_reg.move_out_to(m_dispatch_reg);
+        occupied.set(m_dispatch_reg->latency);
+        if ( (m_dispatch_reg->smObj->get_sm_id() == 11) && source_reg.getName().find("OC_EX_MEM") != std::string::npos) {
+            //std::raise(SIGINT);
+            //printf("m_dispatch_reg Initialized: name : %s ;\n", source_reg.getName().c_str());
+            std::string temp = "m_dispatch_reg Initialized: name : " + source_reg.getName();
+            m_dispatch_reg->warp_inst_t_print(true, true, true, true, temp.c_str());
+        }
+    }
     virtual void cycle() = 0;
     virtual void active_lanes_in_pipeline() = 0;
 
     // accessors
     virtual unsigned clock_multiplier() const { return 1; }
-    virtual bool can_issue( const warp_inst_t &inst ) const { return m_dispatch_reg->empty() && !occupied.test(inst.latency); }
+    virtual bool can_issue( const warp_inst_t &inst ) const {
+        //printf("name: %s ; latancy:%u ; occupied_size:%u ; occupied: %u ;  \n", m_name.c_str(), inst.latency, occupied.size(), occupied.count());
+        return m_dispatch_reg->empty() && !occupied.test(inst.latency);
+    }
     virtual bool stallable() const = 0;
     virtual void print( FILE *fp ) const
     {
         fprintf(fp,"%s dispatch= ", m_name.c_str() );
         m_dispatch_reg->print(fp);
+    }
+
+    virtual std::string getName(){
+        return m_name;
     }
 protected:
     std::string m_name;
@@ -1107,6 +1126,7 @@ public:
         	if( !m_pipeline_reg[stage]->empty() )
         		active_lanes|=m_pipeline_reg[stage]->get_active_mask();
         }
+
         return active_lanes.count();
     }
     virtual void active_lanes_in_pipeline() = 0;
@@ -1269,6 +1289,27 @@ protected:
                shader_core_stats *stats,
                unsigned sid,
                unsigned tpc );
+
+    void print_pending_writes(unsigned warp_id){
+        printf("********************************PENDING WRITES*********************************\n");
+        for (unsigned i=0; i<m_pending_writes[warp_id].size(); i++){
+            if (m_pending_writes[warp_id][i]>0)
+                printf("\t m_pending_writes[%u][%u] = %u \n", warp_id, i ,m_pending_writes[warp_id][i]);
+        }
+        printf("*******************************************************************************\n");
+    }
+
+    void print_pending_writes(){
+        printf("********************************PENDING WRITES*********************************\n");
+        for (unsigned j=0; j<m_pending_writes.size(); j++){
+            for (unsigned i=0; i<m_pending_writes[j].size(); i++){
+                if(m_pending_writes[j][i]>0)
+                    printf("\t m_pending_writes[WID:%u][REG#:%u] = %u \n", j, i ,m_pending_writes[j][i]);
+            }
+        }
+
+        printf("*******************************************************************************\n");
+    }
 
 protected:
    bool shared_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
@@ -1905,8 +1946,13 @@ public:
     friend class scheduler_unit; //this is needed to use private issue warp.
     friend class TwoLevelScheduler;
     friend class LooseRoundRobbinScheduler;
-    void issue_warp( register_set& warp, const warp_inst_t *pI, const active_mask_t &active_mask, unsigned warp_id );
+    void issue_warp( register_set& warp, const warp_inst_t *pI, const active_mask_t &active_mask, unsigned warp_id);
+    void issue_warp2( register_set& warp, const warp_inst_t *pI, const active_mask_t &active_mask, unsigned warp_id, MPRB* mprb_unit);
+    void issue_warp_mprb( register_set& warp, const warp_inst_t *pI, const active_mask_t &active_mask, unsigned warp_id, MPRB* mprb_unit);
     void func_exec_inst( warp_inst_t &inst );
+    void func_exec_inst_noCoal( warp_inst_t &inst );
+    void func_exec_inst_noPtx( warp_inst_t &inst );
+
 
      // Returns numbers of addresses in translated_addrs
     unsigned translate_local_memaddr( address_type localaddr, unsigned tid, unsigned num_shader, unsigned datasize, new_addr_type* translated_addrs );

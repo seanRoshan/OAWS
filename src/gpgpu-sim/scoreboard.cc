@@ -157,8 +157,10 @@ bool Scoreboard::checkCollision( unsigned wid, const class inst_t *inst ) const
 	std::set<int>::const_iterator it2;
 	for ( it2=inst_regs.begin() ; it2 != inst_regs.end(); it2++ )
 		if(reg_table[wid].find(*it2) != reg_table[wid].end()) {
+            //printf("true reg_table[%u].end(): %u; reg_table[%u].find(%u): %u\n", wid, reg_table[wid].end(), wid, (*it2) , reg_table[wid].find(*it2));
 			return true;
 		}
+    //printf("false reg_table[%u].end(): %u; reg_table[%u].find(%u): %u\n", wid, reg_table[wid].end(), wid, (*it2) , reg_table[wid].find(*it2));
 	return false;
 }
 
