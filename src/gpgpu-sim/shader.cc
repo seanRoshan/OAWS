@@ -890,122 +890,111 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
         }
     }
 
-    if ( (next_inst->op==LOAD_OP) || (next_inst->op==STORE_OP) || (next_inst->op == MEMORY_BARRIER_OP)){
-
-        printf("\n$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n");
-
-
-        warp_inst_t** temp_reg = mprb_unit->buffer_get_free();
-
-        assert(temp_reg);
-
-        m_warp[warp_id].ibuffer_free();
-        assert(next_inst->valid());
-        **temp_reg = *next_inst; // static instruction information
-
-
-        (*temp_reg)->warp_inst_t_print(true, true, true, true, "TEMP_REG");
-
-        mprb_unit->print_inputBuffer();
-
-        (*temp_reg)->issue( active_mask, warp_id, gpu_tot_sim_cycle + gpu_sim_cycle, m_warp[warp_id].get_dynamic_warp_id(), m_warp[warp_id].get_sm_id(), drsvrObj ); // dynamic instruction information
-
-        // Act like a histogram to calculate number of active threads for warps
-        m_stats->shader_cycle_distro[2+(*temp_reg)->active_count()]++;
-
-
-        //func_exec_inst_noPtx( **temp_reg );
-
-        func_exec_inst( **temp_reg );
-
-        printf("func_exec_inst OK!\n");
-
-        (*temp_reg)->warp_inst_t_print(true, true, true, true, "TEMP_REG");
-
-
-        if (cycleDebug && m_sid == coreDebug) {
-            if ((*temp_reg)->accessq_count()>1 && (*temp_reg)->isInitial()){
-                printf("DRSVR Divergent workload detected! ; Count:%u ; \n",(*temp_reg)->accessq_count());
-            }
-            mprb_unit->print_inputBuffer();
-        }
-
-
-        if (pipe_reg_set.has_free()){
+    assert( (next_inst->op==LOAD_OP) || (next_inst->op==STORE_OP) || (next_inst->op == MEMORY_BARRIER_OP) );
 
 
 
-            warp_inst_t** pipe_reg = pipe_reg_set.get_free();
-
-            assert(pipe_reg);
-
-            mprb_unit->get_out_inputBuffer((*pipe_reg));
-
-            if (mprb_unit->buffer_has_ready()){
-                mprb_unit->print_inputBuffer();
-            }
-
-            (*pipe_reg)->warp_inst_t_print(true, true, true, true, "PIPE_REG1");
-
-            if( next_inst->op == BARRIER_OP ){
-                m_warp[warp_id].store_info_of_last_inst_at_barrier(*pipe_reg);
-                m_barriers.warp_reaches_barrier(m_warp[warp_id].get_cta_id(),warp_id,const_cast<warp_inst_t*> (next_inst));
-
-            } else if( next_inst->op == MEMORY_BARRIER_OP ){
-                m_warp[warp_id].set_membar();
-            }
-
-            updateSIMTStack(warp_id,*pipe_reg);
-
-            m_scoreboard->reserveRegisters(*pipe_reg);
-
-            m_warp[warp_id].set_next_pc(next_inst->pc + next_inst->isize);
-
-        }
-
-        if (cycleDebug && m_sid == coreDebug){
-
-            if (pipe_reg_set.getName().find("ID_OC_MEM")!=std::string::npos){
-                pipe_reg_set.print2(true);
-                printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n\n");
-            }
-
-        }
-
-        printf("HAS FREE: %u ; HAS READY: %u ;\n", pipe_reg_set.has_free(), pipe_reg_set.has_ready());
-
-        printf("\n############################################################################################\n");
+    printf("\n$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n");
 
 
+    warp_inst_t** temp_reg = mprb_unit->buffer_get_free();
 
+    assert(temp_reg);
+
+    m_warp[warp_id].ibuffer_free();
+    assert(next_inst->valid());
+    **temp_reg = *next_inst; // static instruction information
+
+
+    (*temp_reg)->warp_inst_t_print(true, true, true, true, "TEMP_REG");
+
+
+    mprb_unit->print_inputBuffer();
+
+    (*temp_reg)->issue( active_mask, warp_id, gpu_tot_sim_cycle + gpu_sim_cycle, m_warp[warp_id].get_dynamic_warp_id(), m_warp[warp_id].get_sm_id(), drsvrObj ); // dynamic instruction information
+
+    // Act like a histogram to calculate number of active threads for warps
+    m_stats->shader_cycle_distro[2+(*temp_reg)->active_count()]++;
+
+
+    //func_exec_inst_noPtx( **temp_reg );
+
+    func_exec_inst( **temp_reg );
+
+
+    if( next_inst->op == BARRIER_OP ){
+        m_warp[warp_id].store_info_of_last_inst_at_barrier(*temp_reg);
+        m_barriers.warp_reaches_barrier(m_warp[warp_id].get_cta_id(),warp_id,const_cast<warp_inst_t*> (next_inst));
+
+    } else if( next_inst->op == MEMORY_BARRIER_OP ){
+        m_warp[warp_id].set_membar();
     }
-    else {
+
+    updateSIMTStack(warp_id,*temp_reg);
+
+    m_scoreboard->reserveRegisters(*temp_reg);
+
+    m_warp[warp_id].set_next_pc(next_inst->pc + next_inst->isize);
+
+
+    printf("func_exec_inst OK!\n");
+
+    (*temp_reg)->warp_inst_t_print(true, true, true, true, "TEMP_REG");
+
+
+    if (cycleDebug && m_sid == coreDebug) {
+        if ((*temp_reg)->accessq_count()>1 && (*temp_reg)->isInitial()){
+            printf("DRSVR Divergent workload detected! ; Count:%u ; \n",(*temp_reg)->accessq_count());
+        }
+        mprb_unit->print_inputBuffer();
+    }
+
+    if (pipe_reg_set.has_free()){
+
 
         warp_inst_t** pipe_reg = pipe_reg_set.get_free();
 
         assert(pipe_reg);
 
-        m_warp[warp_id].ibuffer_free();
-        assert(next_inst->valid());
-        **pipe_reg = *next_inst; // static instruction information
+        mprb_unit->get_out_inputBuffer((*pipe_reg));
 
-        (*pipe_reg)->issue( active_mask, warp_id, gpu_tot_sim_cycle + gpu_sim_cycle, m_warp[warp_id].get_dynamic_warp_id(), m_warp[warp_id].get_sm_id(), drsvrObj ); // dynamic instruction information
+        if (mprb_unit->buffer_has_ready()){
+            mprb_unit->print_inputBuffer();
+        }
 
-        // Act like a histogram to calculate number of active threads for warps
-        m_stats->shader_cycle_distro[2+(*pipe_reg)->active_count()]++;
+        (*pipe_reg)->warp_inst_t_print(true, true, true, true, "PIPE_REG1");
 
-        func_exec_inst( **pipe_reg );
+        /*if( next_inst->op == BARRIER_OP ){
+            m_warp[warp_id].store_info_of_last_inst_at_barrier(*pipe_reg);
+            m_barriers.warp_reaches_barrier(m_warp[warp_id].get_cta_id(),warp_id,const_cast<warp_inst_t*> (next_inst));
 
+        } else if( next_inst->op == MEMORY_BARRIER_OP ){
+            m_warp[warp_id].set_membar();
+        }
 
         updateSIMTStack(warp_id,*pipe_reg);
 
         m_scoreboard->reserveRegisters(*pipe_reg);
 
-        m_warp[warp_id].set_next_pc(next_inst->pc + next_inst->isize);
-
-        (*pipe_reg)->resetInitial_issue();
+        m_warp[warp_id].set_next_pc(next_inst->pc + next_inst->isize);*/
 
     }
+
+    if (cycleDebug && m_sid == coreDebug){
+
+        if (pipe_reg_set.getName().find("ID_OC_MEM")!=std::string::npos){
+            pipe_reg_set.print2(true);
+            printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n\n");
+        }
+
+    }
+
+    printf("HAS FREE: %u ; HAS READY: %u ;\n", pipe_reg_set.has_free(), pipe_reg_set.has_ready());
+
+    printf("\n############################################################################################\n");
+
+
+
 
 }
 
@@ -1640,9 +1629,9 @@ void scheduler_unit::cycle()
 
                             // SHOULD CHANGE HERE
 
-                           if( m_mem_out->has_free() ) {
+                           //if( m_mem_out->has_free() ) {
 
-                           //if( smObj->global_MPRB_obj->buffer_has_free()){
+                           if( smObj->global_MPRB_obj->buffer_has_free()){
 
                                 if (!(*iter)->oaws_approved()){
                                     assert( pI->op != LOAD_OP );
@@ -1652,13 +1641,12 @@ void scheduler_unit::cycle()
                                     printf("DRSVR OAWS WARP ISSUED: Cycle: %llu ; [%u;%u;%u] ; OP:%u ; Space: %u\n", gpu_sim_cycle, (*iter)->get_warp_id(), (*iter)->get_sm_id(), (*iter)->get_pc(), (*pI).op, (*pI).space );
                                 }
 
-                                m_shader->issue_warp_mprb(*m_mem_out, pI, active_mask, warp_id, smObj->global_MPRB_obj);
+                                m_shader->issue_warp2(*m_mem_out, pI, active_mask, warp_id, smObj->global_MPRB_obj);
                                 //m_shader->issue_warp(*m_mem_out, pI, active_mask, warp_id);
 
                                 if (debugMode) {
                                     printf("DRSVR OAWS WARP ISSUED: Cycle: %llu ; Warp ID: %u ; SM_ID: %u; PC:%u ; OP:%u ; Space: %u\n", gpu_sim_cycle, (*iter)->get_warp_id(), (*iter)->get_sm_id(), (*iter)->get_pc(), (*pI).op, (*pI).space );
                                 }
-
 
                                 issued++;
                                 issued_inst = true;
@@ -1675,13 +1663,6 @@ void scheduler_unit::cycle()
                             }
 
                         } else {
-
-                            if (m_mem_out->has_ready()){
-                                m_mem_out->print2(true);
-                                printf("sp_pipe_avail Warp ID:%u ; \n", warp_id);
-                            }
-
-
 
                             bool sp_pipe_avail = m_sp_out->has_free();
                             bool sfu_pipe_avail = m_sfu_out->has_free();
