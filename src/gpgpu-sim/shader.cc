@@ -56,7 +56,7 @@
 bool DRSVRdebug = false;
 
 bool cycleDebug = true;
-unsigned coreDebug = 11 ;
+unsigned coreDebug = 8 ;
 
 std::list<unsigned> shader_core_ctx::get_regs_written( const inst_t &fvt ) const
 {
@@ -880,25 +880,54 @@ void shader_core_ctx::issue_warp_mprb( register_set& pipe_reg_set, const warp_in
 void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t* next_inst, const active_mask_t &active_mask, unsigned warp_id, MPRB* mprb_unit)
 {
 
+    bool m_mem_out_filled = false;
+
     assert(drsvrObj);
+    assert( pipe_reg_set.has_free() || mprb_unit->buffer_has_free() );
+    assert( (next_inst->op==LOAD_OP) || (next_inst->op==STORE_OP) || (next_inst->op == MEMORY_BARRIER_OP) );
+
 
 
     if (cycleDebug && m_sid == coreDebug) {
         if (pipe_reg_set.getName().find("ID_OC_MEM") != std::string::npos) {
             printf("\n$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n");
-            printf("DRSVR shader_core_ctx::issue_warp() name: %s ; SID:%u ;\n", pipe_reg_set.getName().c_str(), m_sid);
+            printf("DRSVR shader_core_ctx::issue_warp() name: %s ; SID:%u ;\n\n", pipe_reg_set.getName().c_str(), m_sid);
         }
     }
 
-    assert( (next_inst->op==LOAD_OP) || (next_inst->op==STORE_OP) || (next_inst->op == MEMORY_BARRIER_OP) );
 
 
+    if ( pipe_reg_set.has_free() && mprb_unit->buffer_has_ready()){
 
-    printf("\n$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n");
+
+        if (cycleDebug && m_sid == coreDebug) {
+            printf("\nMove a warp from a buffer to m_mem_out!\n\n");
+            const_cast<warp_inst_t*>(next_inst)->warp_inst_t_print(true, false, false, false, "warp_issued");
+            printf("\nBefore:\n");
+            pipe_reg_set.print2(true);
+            mprb_unit->print_inputBuffer();
+        }
+
+
+        warp_inst_t** pipe_reg = pipe_reg_set.get_free();
+
+        assert(pipe_reg);
+
+        mprb_unit->get_out_inputBuffer((*pipe_reg));
+
+        m_mem_out_filled = true;
+
+
+        if (cycleDebug && m_sid == coreDebug) {
+            printf("\nAfter:\n");
+            pipe_reg_set.print2(true);
+            mprb_unit->print_inputBuffer();
+        }
+
+    }
 
 
     warp_inst_t** temp_reg = mprb_unit->buffer_get_free();
-
     assert(temp_reg);
 
     m_warp[warp_id].ibuffer_free();
@@ -906,18 +935,19 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
     **temp_reg = *next_inst; // static instruction information
 
 
-    (*temp_reg)->warp_inst_t_print(true, true, true, true, "TEMP_REG");
+    if (cycleDebug && m_sid == coreDebug) {
+        printf("\n\n##################################################################################\n");
+        (*temp_reg)->warp_inst_t_print(true, true, true, true, "TEMP_REG_BEFOREISSUE");
+        printf("warp_id:%u ; active_mast:%s ;\n", warp_id, active_mask.to_string().c_str());
+        mprb_unit->print_inputBuffer();
+        printf("##################################################################################\n\n");
+    }
 
-
-    mprb_unit->print_inputBuffer();
 
     (*temp_reg)->issue( active_mask, warp_id, gpu_tot_sim_cycle + gpu_sim_cycle, m_warp[warp_id].get_dynamic_warp_id(), m_warp[warp_id].get_sm_id(), drsvrObj ); // dynamic instruction information
 
     // Act like a histogram to calculate number of active threads for warps
     m_stats->shader_cycle_distro[2+(*temp_reg)->active_count()]++;
-
-
-    //func_exec_inst_noPtx( **temp_reg );
 
     func_exec_inst( **temp_reg );
 
@@ -926,7 +956,8 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
         m_warp[warp_id].store_info_of_last_inst_at_barrier(*temp_reg);
         m_barriers.warp_reaches_barrier(m_warp[warp_id].get_cta_id(),warp_id,const_cast<warp_inst_t*> (next_inst));
 
-    } else if( next_inst->op == MEMORY_BARRIER_OP ){
+    }
+    else if( next_inst->op == MEMORY_BARRIER_OP ){
         m_warp[warp_id].set_membar();
     }
 
@@ -937,20 +968,21 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
     m_warp[warp_id].set_next_pc(next_inst->pc + next_inst->isize);
 
 
-    printf("func_exec_inst OK!\n");
-
-    (*temp_reg)->warp_inst_t_print(true, true, true, true, "TEMP_REG");
-
-
     if (cycleDebug && m_sid == coreDebug) {
+
+        printf("\n\n##################################################################################\n");
+
+        (*temp_reg)->warp_inst_t_print(true, true, true, true, "TEMP_REG_AFTERISSUE");
+
         if ((*temp_reg)->accessq_count()>1 && (*temp_reg)->isInitial()){
             printf("DRSVR Divergent workload detected! ; Count:%u ; \n",(*temp_reg)->accessq_count());
         }
         mprb_unit->print_inputBuffer();
+
+        printf("##################################################################################\n\n");
     }
 
-    if (pipe_reg_set.has_free()){
-
+    if ( ( pipe_reg_set.has_free() ) && ( m_mem_out_filled == false ) ){
 
         warp_inst_t** pipe_reg = pipe_reg_set.get_free();
 
@@ -958,43 +990,26 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
 
         mprb_unit->get_out_inputBuffer((*pipe_reg));
 
-        if (mprb_unit->buffer_has_ready()){
-            mprb_unit->print_inputBuffer();
-        }
-
-        (*pipe_reg)->warp_inst_t_print(true, true, true, true, "PIPE_REG1");
-
-        /*if( next_inst->op == BARRIER_OP ){
-            m_warp[warp_id].store_info_of_last_inst_at_barrier(*pipe_reg);
-            m_barriers.warp_reaches_barrier(m_warp[warp_id].get_cta_id(),warp_id,const_cast<warp_inst_t*> (next_inst));
-
-        } else if( next_inst->op == MEMORY_BARRIER_OP ){
-            m_warp[warp_id].set_membar();
-        }
-
-        updateSIMTStack(warp_id,*pipe_reg);
-
-        m_scoreboard->reserveRegisters(*pipe_reg);
-
-        m_warp[warp_id].set_next_pc(next_inst->pc + next_inst->isize);*/
+        m_mem_out_filled = true;
 
     }
 
-    if (cycleDebug && m_sid == coreDebug){
+   if (cycleDebug && m_sid == coreDebug){
+
+        if (mprb_unit->buffer_has_ready()){
+           mprb_unit->print_inputBuffer();
+        }
 
         if (pipe_reg_set.getName().find("ID_OC_MEM")!=std::string::npos){
             pipe_reg_set.print2(true);
             printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n\n");
         }
 
-    }
+       printf("HAS FREE: %u ; HAS READY: %u ;\n", pipe_reg_set.has_free(), pipe_reg_set.has_ready());
 
-    printf("HAS FREE: %u ; HAS READY: %u ;\n", pipe_reg_set.has_free(), pipe_reg_set.has_ready());
+       printf("\n############################################################################################\n");
 
-    printf("\n############################################################################################\n");
-
-
-
+   }
 
 }
 
@@ -1437,7 +1452,7 @@ void scheduler_unit::order_by_priority( bool isOAWS,
         bool OAWS_EN = (m_shader->m_config->drsvr_stats_runtime_oaws== 1 ) ? true : false ;
         bool debugMode = DRSVRdebug || OAWS_EN || ( (this->get_sid() == coreDebug) && cycleDebug )  ;
 
-        if ( (result_list.size()>0) && /*(result_list.at(0)->get_sm_id() == 9 ) &&*/  debugMode) {
+        if ( (result_list.size()>0) && debugMode) {
 
             printf("\n--------------------------------------------------------------------------------\nDRSVR WARP ORDER AFTER SORT: \n");
 
@@ -1445,6 +1460,8 @@ void scheduler_unit::order_by_priority( bool isOAWS,
                    greedy_value->get_dynamic_warp_id(), greedy_value->get_pc(),
                    greedy_value->get_sm_id(), greedy_value->oaws_approved());*/
 
+            j = 0;
+            o = 0;
 
             for (unsigned i = 0; i < result_list.size(); i++) {
 
@@ -1466,6 +1483,17 @@ void scheduler_unit::order_by_priority( bool isOAWS,
                             , result_list.at(i)->ibuffer_next_inst()->op
                     );
                     result_list.at(i)->print2_ibuffer();
+                }
+                else {
+                    printf("%u-%u - PC:%u - SM:%u [O:%u-%u][T:%u-%u][E:%u][W:%u]; Space:%u ; OP:%u inst :\n"
+                            , result_list.at(i)->get_warp_id(), result_list.at(i)->get_dynamic_warp_id()
+                            , result_list.at(i)->get_pc(), result_list.at(i)->get_sm_id()
+                            , result_list.at(i)->oaws_approved(), m_simt_stack[result_list.at(i)->get_warp_id()]->get_active_mask().count()
+                            , result_list.at(i)->ocw_approved(), result_list.at(i)->get_gprio()
+                            , result_list.at(i)->done_exit(), result_list.at(i)->waiting()
+                            , 0
+                            , 0
+                    );
                 }
                 if (result_list.at(i)->oaws_approved()) {
                     o++;
@@ -1631,7 +1659,7 @@ void scheduler_unit::cycle()
 
                            //if( m_mem_out->has_free() ) {
 
-                           if( smObj->global_MPRB_obj->buffer_has_free()){
+                           if( smObj->global_MPRB_obj->buffer_has_free() || m_mem_out->has_free() ){
 
                                 if (!(*iter)->oaws_approved()){
                                     assert( pI->op != LOAD_OP );

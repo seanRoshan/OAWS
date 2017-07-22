@@ -2645,10 +2645,10 @@ public:
         if (info){
             printf("------------------------------------------------------------------------------------\n");
             printf("%s\n[%u;%u;%u] ; op : %s ; oprnd_type : %s \n"
-                           "interval: %u ; latency: %u ; num_regs_%u; num_operand:%u ; \n"
+                           "interval: %u ; latency: %u ; num_regs_%u; num_operand:%u ; empty:%u ;\n"
                     , warp_register_name
                     , m_warp_id, m_sm_id, pc, this->get_uarch_op_t_string(op), this->get_uarch_op_t_string(oprnd_type)
-                    , initiation_interval, latency, num_regs, num_operands
+                    , initiation_interval, latency, num_regs, num_operands, m_empty
             );
         }
 
@@ -3101,7 +3101,12 @@ public:
             std::ostringstream oss;
             oss << "input_buffer[" << i << "]" ;
             std::string name = oss.str();
-            inputBuffer[i]->warp_inst_t_print(true,false,false,false, name.c_str());
+            if (inputBuffer[i]->empty()){
+                printf("input_buffer[%u] = empty ; \n", i);
+            }
+            else{
+                inputBuffer[i]->warp_inst_t_print(true,false,false,false, name.c_str());
+            }
         }
     }
 
