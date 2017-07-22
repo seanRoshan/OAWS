@@ -884,7 +884,8 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
 
     assert(drsvrObj);
     assert( pipe_reg_set.has_free() || mprb_unit->buffer_has_free() );
-    assert( (next_inst->op==LOAD_OP) || (next_inst->op==STORE_OP) || (next_inst->op == MEMORY_BARRIER_OP) );
+
+    //assert( (next_inst->op==LOAD_OP) || (next_inst->op==STORE_OP) || (next_inst->op == MEMORY_BARRIER_OP) );
 
 
 
@@ -899,10 +900,8 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
 
     if ( pipe_reg_set.has_free() && mprb_unit->buffer_has_ready()){
 
-
         if (cycleDebug && m_sid == coreDebug) {
             printf("\nMove a warp from a buffer to m_mem_out!\n\n");
-            const_cast<warp_inst_t*>(next_inst)->warp_inst_t_print(true, false, false, false, "warp_issued");
             printf("\nBefore:\n");
             pipe_reg_set.print2(true);
             mprb_unit->print_inputBuffer();
@@ -917,11 +916,16 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
 
         m_mem_out_filled = true;
 
-
         if (cycleDebug && m_sid == coreDebug) {
             printf("\nAfter:\n");
             pipe_reg_set.print2(true);
             mprb_unit->print_inputBuffer();
+        }
+
+        // BYPASS SCHEDULER AND ISSUE WARP FROM THE BUFFER
+        if (warp_id == 1370){
+            printf("ISSUE a warp from the buffer!\n");
+            return;
         }
 
     }
@@ -1521,6 +1525,20 @@ void scheduler_unit::order_by_priority( bool isOAWS,
 void scheduler_unit::cycle()
 {
 
+    // OVERRIDE ISSUE WARP
+
+    if ( m_mem_out->has_free() && smObj->global_MPRB_obj->buffer_has_ready()){
+
+        const warp_inst_t *pI_temp;
+
+        active_mask_t active_mask_temp;
+
+        m_shader->issue_warp2(*m_mem_out, pI_temp, active_mask_temp, 1370, smObj->global_MPRB_obj);
+
+    }
+
+
+
     bool OAWS_EN = (m_shader->m_config->drsvr_stats_runtime_oaws== 1 ) ? true : false ;
     bool debugMode = DRSVRdebug || OAWS_EN;
 
@@ -1817,7 +1835,6 @@ void scheduler_unit::cycle()
     }
 
 
-
     // issue stall statistics:f
     if( !valid_inst )
         m_stats->shader_cycle_distro[0]++; // idle or control hazard
@@ -1825,6 +1842,9 @@ void scheduler_unit::cycle()
         m_stats->shader_cycle_distro[1]++; // waiting for RAW hazards (possibly due to memory)
     else if( !issued_inst )
         m_stats->shader_cycle_distro[2]++; // pipeline stalled
+
+
+
 
 
 }
@@ -2496,7 +2516,7 @@ mem_stage_stall_type ldst_unit::process_memory_access_queue( cache_t *cache, war
 
     if (cycleDebug && m_sid == coreDebug){
         printf("DRSVR PROCESS MEMORY ACCESS QUEUE! SID:%u Memory AccessQ size:%u\n", m_sid, inst.accessq_count());
-        //inst.accessq_print();
+        inst.accessq_print();
         //mf->print2();
     }
 
@@ -2937,6 +2957,9 @@ void ldst_unit::writeback()
                         unsigned still_pending = --m_pending_writes[m_next_wb.warp_id()][m_next_wb.out[r]];
                         if( !still_pending ) {
                             m_pending_writes[m_next_wb.warp_id()].erase(m_next_wb.out[r]);
+                            if (cycleDebug && m_sid == coreDebug){
+                                printf("DRSVR ldst_unit::writeback() Release Register - warp:%u , reg: %d SID:%u\n", m_next_wb.warp_id(), m_next_wb.out[r] , m_sid);
+                            }
                             m_scoreboard->releaseRegister( m_next_wb.warp_id(), m_next_wb.out[r] );
                             insn_completed = true; 
                         }
@@ -3131,9 +3154,11 @@ void ldst_unit::cycle()
        }
    }
 
+
    warp_inst_t &pipe_reg = *m_dispatch_reg;
    enum mem_stage_stall_type rc_fail = NO_RC_FAIL;
    mem_stage_access_type type;
+
    bool done = true;
    done &= shared_cycle(pipe_reg, rc_fail, type);
    done &= constant_cycle(pipe_reg, rc_fail, type);

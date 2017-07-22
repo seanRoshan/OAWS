@@ -74,6 +74,9 @@ void Scoreboard::releaseRegister(unsigned wid, unsigned regnum)
 {
 	if( !(reg_table[wid].find(regnum) != reg_table[wid].end()) ) 
         return;
+
+    //printf("Release register - warp:%d, reg: %d\n", wid, regnum );
+
     SHADER_DPRINTF( SCOREBOARD,
                     "Release register - warp:%d, reg: %d\n", wid, regnum );
 	reg_table[wid].erase(regnum);
