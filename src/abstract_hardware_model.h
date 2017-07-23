@@ -664,6 +664,21 @@ public:
    enum mem_access_type get_type() const { return m_type; }
    mem_access_byte_mask_t get_byte_mask() const { return m_byte_mask; }
 
+
+
+
+   // MPRB ADDED
+
+   void mprb_set_warp_id (unsigned warp_id){
+       mprb_wid = warp_id;
+   }
+
+   unsigned mprb_get_warp_id (){
+       return mprb_wid;
+   }
+
+
+
    void print(FILE *fp) const
    {
        fprintf(fp,"addr=0x%llx, %s, size=%u, ", m_addr, m_write?"store":"load ", m_req_size );
@@ -684,7 +699,7 @@ public:
     void print2() const
     {
         //printf("addr=0x%llx, %s, size=%u, ", m_addr, m_write?"store":"load ", m_req_size );
-        printf("addr=%u, %s, size=%u, ", m_addr, m_write?"store":"load ", m_req_size );
+        printf("warp_id=%u ; addr=%u, %s, size=%u, ", mprb_wid, m_addr, m_write?"store":"load ", m_req_size );
         switch(m_type) {
             case GLOBAL_ACC_R:  printf("GLOBAL_R"); break;
             case LOCAL_ACC_R:   printf("LOCAL_R "); break;
@@ -700,12 +715,15 @@ public:
     }
 
 private:
-   void init() 
+   void init()
    {
       m_uid=++sm_next_access_uid;
       m_addr=0;
       m_req_size=0;
+      mprb_wid=0;
    }
+
+   unsigned mprb_wid;
 
    unsigned      m_uid;
    new_addr_type m_addr;     // request address
@@ -2619,6 +2637,22 @@ public:
     unsigned accessq_count() const { return m_accessq.size(); }
     const mem_access_t &accessq_back() { return m_accessq.back(); }
     void accessq_pop_back() { m_accessq.pop_back(); }
+    void accessq_clear(){ m_accessq.clear(); }
+
+    std::list<mem_access_t> mprb_get_accessq_list(){
+        return m_accessq;
+    }
+
+    void mprb_add_accessq_list(std::list<mem_access_t> input){
+
+        m_accessq.clear();
+        std::list<mem_access_t>::iterator it;
+        for (it = input.begin(); it!= input.end(); it++){
+            m_accessq.push_back(*it);
+        }
+
+    }
+
 
     void accessq_print(){
         unsigned i = 0;
@@ -2645,10 +2679,10 @@ public:
         if (info){
             printf("------------------------------------------------------------------------------------\n");
             printf("%s\n[%u;%u;%u] ; op : %s ; oprnd_type : %s \n"
-                           "interval: %u ; latency: %u ; num_regs_%u; num_operand:%u ; empty:%u ;\n"
+                           "interval: %u ; latency: %u ; num_regs_%u; num_operand:%u ; empty:%u ; accessq_size:%u ;\n"
                     , warp_register_name
                     , m_warp_id, m_sm_id, pc, this->get_uarch_op_t_string(op), this->get_uarch_op_t_string(oprnd_type)
-                    , initiation_interval, latency, num_regs, num_operands, m_empty
+                    , initiation_interval, latency, num_regs, num_operands, m_empty, m_accessq.size()
             );
         }
 
@@ -2830,11 +2864,11 @@ size_t get_kernel_code_size( class function_info *entry );
 
 /*
  * This abstract class used as a base for functional and performance and simulation, it has basic functional simulation
- * data structures and procedures. 
+ * data structures and procedures.
  */
 class core_t {
     public:
-        core_t( gpgpu_sim *gpu, 
+        core_t( gpgpu_sim *gpu,
                 kernel_info_t *kernel,
                 unsigned warp_size,
                 unsigned threads_per_shader )
@@ -3111,6 +3145,8 @@ public:
     }
 
 
+
+
     // WarpQueue Buffer Functions
 
     bool WarpQueue_has_free(){
@@ -3159,20 +3195,76 @@ public:
     }
 
     void get_out_warpsQueue( warp_inst_t *&dest ){
-        warp_inst_t **ready=WarpQueue_get_free();
+        //warp_inst_t **ready=buffer_get_ready();
+        warp_inst_t **ready = &warpsQueue[0];
         move_warp(dest, *ready);
+        for (unsigned i=0; (i+1)<warpsQueue.size(); i++){
+            if (not warpsQueue[i+1]->empty() ){
+                move_warp(warpsQueue[i], warpsQueue[i+1]);
+                warpsQueue[i+1] = new warp_inst_t();
+            }
+            else {
+                warpsQueue[i] = new warp_inst_t();
+            }
+        }
     }
+
 
     void print_warpsQueue(){
         for (unsigned i=0; i<warpsQueue.size(); i++){
             std::ostringstream oss;
             oss << "warpsQueue[" << i << "]" ;
             std::string name = oss.str();
-            warpsQueue[i]->warp_inst_t_print(true,false,false,false, name.c_str());
+            if (warpsQueue[i]->empty()){
+                printf("warpsQueue[%u] = empty ; \n", i);
+            }
+            else{
+                warpsQueue[i]->warp_inst_t_print(true,false,false,false, name.c_str());
+            }
+
         }
     }
 
 
+    void filter_split_transactions_warp(warp_inst_t *&src) {
+
+        assert(!src->empty());
+
+        unsigned warp_id = src->get_warp_id();
+
+        std::list<mem_access_t> m_accessq = src->mprb_get_accessq_list();
+
+        std::list<mem_access_t>::iterator it;
+
+        for (it = m_accessq.begin(); it!=m_accessq.end(); it++){
+            (*it).mprb_set_warp_id(warp_id);
+            transactionsQueue.push_back(*it);
+        }
+
+        if (WarpQueue_has_free()){
+            warp_inst_t** free = WarpQueue_get_free();
+            **free = *src;
+
+            (*free)->accessq_clear();
+            //**temp_reg = *next_inst; // static instruction information
+            //move_warp(*free, src);
+        }
+
+        print_transaction_queue();
+        print_warpsQueue();
+
+    }
+
+    void print_transaction_queue(){
+        printf("MPRB Transaction Queue! Size: %u\n", transactionsQueue.size());
+        printf("------------------------------------------------------------\n");
+        for (unsigned i=0; i<transactionsQueue.size(); i++){
+            printf("transaction_queue[%u] :  ", i);
+            transactionsQueue.at(i).print2();
+            printf("\n");
+        }
+        printf("------------------------------------------------------------\n");
+    }
 
 
     enum drainPolicy{
@@ -3194,7 +3286,7 @@ private:
     unsigned warpQueueSize = 10;
 
     std::vector<mem_access_t> transactionsQueue;
-    unsigned transactionQueueSize = 10;
+    unsigned transactionQueueSize = 100;
 
 };
 

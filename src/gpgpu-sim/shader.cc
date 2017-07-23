@@ -931,6 +931,8 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
     }
 
 
+    // Everything starts here
+
     warp_inst_t** temp_reg = mprb_unit->buffer_get_free();
     assert(temp_reg);
 
@@ -939,13 +941,14 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
     **temp_reg = *next_inst; // static instruction information
 
 
-    if (cycleDebug && m_sid == coreDebug) {
+
+    /*if (cycleDebug && m_sid == coreDebug) {
         printf("\n\n##################################################################################\n");
         (*temp_reg)->warp_inst_t_print(true, true, true, true, "TEMP_REG_BEFOREISSUE");
         printf("warp_id:%u ; active_mast:%s ;\n", warp_id, active_mask.to_string().c_str());
         mprb_unit->print_inputBuffer();
         printf("##################################################################################\n\n");
-    }
+    }*/
 
 
     (*temp_reg)->issue( active_mask, warp_id, gpu_tot_sim_cycle + gpu_sim_cycle, m_warp[warp_id].get_dynamic_warp_id(), m_warp[warp_id].get_sm_id(), drsvrObj ); // dynamic instruction information
@@ -954,6 +957,11 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
     m_stats->shader_cycle_distro[2+(*temp_reg)->active_count()]++;
 
     func_exec_inst( **temp_reg );
+
+
+    // Here transactions have been generated in **temp_reg
+
+
 
 
     if( next_inst->op == BARRIER_OP ){
@@ -972,7 +980,11 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
     m_warp[warp_id].set_next_pc(next_inst->pc + next_inst->isize);
 
 
-    if (cycleDebug && m_sid == coreDebug) {
+
+
+
+
+    /*if (cycleDebug && m_sid == coreDebug) {
 
         printf("\n\n##################################################################################\n");
 
@@ -984,7 +996,21 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
         mprb_unit->print_inputBuffer();
 
         printf("##################################################################################\n\n");
+    } */
+
+
+
+    if (mprb_unit->WarpQueue_has_free()){
+
+        (*temp_reg)->warp_inst_t_print(true, true, true, true, "src_before");
+
+        mprb_unit->filter_split_transactions_warp(*temp_reg);
+
+        (*temp_reg)->warp_inst_t_print(true, true, true, true, "src_after");
     }
+
+
+
 
     if ( ( pipe_reg_set.has_free() ) && ( m_mem_out_filled == false ) ){
 
@@ -997,6 +1023,8 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
         m_mem_out_filled = true;
 
     }
+
+
 
    if (cycleDebug && m_sid == coreDebug){
 
