@@ -885,9 +885,6 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
     assert(drsvrObj);
     assert( pipe_reg_set.has_free() || mprb_unit->buffer_has_free() );
 
-    //assert( (next_inst->op==LOAD_OP) || (next_inst->op==STORE_OP) || (next_inst->op == MEMORY_BARRIER_OP) );
-
-
 
     if (cycleDebug && m_sid == coreDebug) {
         if (pipe_reg_set.getName().find("ID_OC_MEM") != std::string::npos) {
