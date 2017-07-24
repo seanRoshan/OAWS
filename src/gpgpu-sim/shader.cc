@@ -56,7 +56,7 @@
 bool DRSVRdebug = false;
 
 bool cycleDebug = true;
-unsigned coreDebug = 8 ;
+unsigned coreDebug = 6 ;
 
 std::list<unsigned> shader_core_ctx::get_regs_written( const inst_t &fvt ) const
 {
@@ -886,44 +886,47 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
     assert( pipe_reg_set.has_free() || mprb_unit->buffer_has_free() );
 
 
-    if (cycleDebug && m_sid == coreDebug) {
+    /*if (cycleDebug && m_sid == coreDebug) {
         if (pipe_reg_set.getName().find("ID_OC_MEM") != std::string::npos) {
             printf("\n$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n");
             printf("DRSVR shader_core_ctx::issue_warp() name: %s ; SID:%u ;\n\n", pipe_reg_set.getName().c_str(), m_sid);
         }
-    }
+    }*/
 
 
+    // TRANSFER WARP FROM MPRB TO THE ID_OC_REGISTER
+    //if ( pipe_reg_set.has_free() && mprb_unit->buffer_has_ready() ){
+    if ( pipe_reg_set.has_free() && mprb_unit->WarpQueue_has_ready() ){
 
-    if ( pipe_reg_set.has_free() && mprb_unit->buffer_has_ready()){
-
-        if (cycleDebug && m_sid == coreDebug) {
+        /*if (cycleDebug && m_sid == coreDebug) {
             printf("\nMove a warp from a buffer to m_mem_out!\n\n");
             printf("\nBefore:\n");
             pipe_reg_set.print2(true);
             mprb_unit->print_inputBuffer();
-        }
-
+        }*/
 
         warp_inst_t** pipe_reg = pipe_reg_set.get_free();
 
         assert(pipe_reg);
 
-        mprb_unit->get_out_inputBuffer((*pipe_reg));
+        //mprb_unit->get_out_inputBuffer((*pipe_reg));
+        mprb_unit->get_readywarp_mprb(*pipe_reg);
 
         m_mem_out_filled = true;
 
-        if (cycleDebug && m_sid == coreDebug) {
+
+        /*if (cycleDebug && m_sid == coreDebug) {
             printf("\nAfter:\n");
             pipe_reg_set.print2(true);
             mprb_unit->print_inputBuffer();
-        }
+        }*/
 
         // BYPASS SCHEDULER AND ISSUE WARP FROM THE BUFFER
         if (warp_id == 1370){
             printf("ISSUE a warp from the buffer!\n");
             return;
         }
+
 
     }
 
@@ -937,8 +940,6 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
     assert(next_inst->valid());
     **temp_reg = *next_inst; // static instruction information
 
-
-
     /*if (cycleDebug && m_sid == coreDebug) {
         printf("\n\n##################################################################################\n");
         (*temp_reg)->warp_inst_t_print(true, true, true, true, "TEMP_REG_BEFOREISSUE");
@@ -947,18 +948,11 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
         printf("##################################################################################\n\n");
     }*/
 
-
     (*temp_reg)->issue( active_mask, warp_id, gpu_tot_sim_cycle + gpu_sim_cycle, m_warp[warp_id].get_dynamic_warp_id(), m_warp[warp_id].get_sm_id(), drsvrObj ); // dynamic instruction information
 
-    // Act like a histogram to calculate number of active threads for warps
-    m_stats->shader_cycle_distro[2+(*temp_reg)->active_count()]++;
+    m_stats->shader_cycle_distro[2+(*temp_reg)->active_count()]++; // Act like a histogram to calculate number of active threads for warps
 
-    func_exec_inst( **temp_reg );
-
-
-    // Here transactions have been generated in **temp_reg
-
-
+    func_exec_inst( **temp_reg ); // Here transactions have been generated in **temp_reg
 
 
     if( next_inst->op == BARRIER_OP ){
@@ -976,9 +970,7 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
 
     m_warp[warp_id].set_next_pc(next_inst->pc + next_inst->isize);
 
-
-
-
+    mprb_unit->put_readywarp_mprb(*temp_reg, gpu_sim_cycle);
 
 
     /*if (cycleDebug && m_sid == coreDebug) {
@@ -997,25 +989,27 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
 
 
 
-    if (mprb_unit->WarpQueue_has_free()){
+    /*if (mprb_unit->WarpQueue_has_free()){
 
         (*temp_reg)->warp_inst_t_print(true, true, true, true, "src_before");
 
         mprb_unit->filter_split_transactions_warp(*temp_reg);
 
         (*temp_reg)->warp_inst_t_print(true, true, true, true, "src_after");
-    }
+    }*/
 
 
 
 
-    if ( ( pipe_reg_set.has_free() ) && ( m_mem_out_filled == false ) ){
+    if ( ( pipe_reg_set.has_free() ) && ( m_mem_out_filled == false ) && (mprb_unit->WarpQueue_has_ready())){
 
         warp_inst_t** pipe_reg = pipe_reg_set.get_free();
 
         assert(pipe_reg);
 
-        mprb_unit->get_out_inputBuffer((*pipe_reg));
+        //mprb_unit->get_out_inputBuffer((*pipe_reg));
+
+        mprb_unit->get_readywarp_mprb(*pipe_reg);
 
         m_mem_out_filled = true;
 
@@ -1023,7 +1017,7 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
 
 
 
-   if (cycleDebug && m_sid == coreDebug){
+   /*if (cycleDebug && m_sid == coreDebug){
 
         if (mprb_unit->buffer_has_ready()){
            mprb_unit->print_inputBuffer();
@@ -1038,7 +1032,7 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
 
        printf("\n############################################################################################\n");
 
-   }
+   }*/
 
 }
 
@@ -1552,13 +1546,14 @@ void scheduler_unit::cycle()
 
     // OVERRIDE ISSUE WARP
 
-    if ( m_mem_out->has_free() && smObj->global_MPRB_obj->buffer_has_ready()){
+    if ( m_mem_out->has_free() && smObj->global_MPRB_obj->WarpQueue_has_ready()){
 
+        // Dummy Data
         const warp_inst_t *pI_temp;
-
         active_mask_t active_mask_temp;
+        unsigned  warp_id = 1370;
 
-        m_shader->issue_warp2(*m_mem_out, pI_temp, active_mask_temp, 1370, smObj->global_MPRB_obj);
+        m_shader->issue_warp2(*m_mem_out, pI_temp, active_mask_temp, warp_id, smObj->global_MPRB_obj);
 
     }
 
@@ -1702,7 +1697,7 @@ void scheduler_unit::cycle()
 
                            //if( m_mem_out->has_free() ) {
 
-                           if( smObj->global_MPRB_obj->buffer_has_free() || m_mem_out->has_free() ){
+                           if( smObj->global_MPRB_obj->WarpQueue_has_free() || m_mem_out->has_free() ){
 
                                 if (!(*iter)->oaws_approved()){
                                     assert( pI->op != LOAD_OP );
@@ -2916,19 +2911,45 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
 void ldst_unit::issue( register_set &reg_set )
 {
 
-    warp_inst_t* inst = *(reg_set.get_ready());
+    if (cycleDebug && m_sid == coreDebug){
+        //printf("ldst_unit::issue(); SID:%u ;", m_sid);
+        warp_inst_t* inst_temp = *(reg_set.get_ready());
+        inst_temp->warp_inst_t_print(true, false, false, false, "ldst_unit::issue()");
+        inst_temp->accessq_print();
+    }
+
+
+   bool mprb_activated = true;
+
+   warp_inst_t* inst = *(reg_set.get_ready());
 
    // record how many pending register writes/memory accesses there are for this instruction
    assert(inst->empty() == false);
 
    if (inst->is_load() and inst->space.get_type() != shared_space) {
-      unsigned warp_id = inst->warp_id();
-      unsigned n_accesses = inst->accessq_count();
-      for (unsigned r = 0; r < 4; r++) {
-         unsigned reg_id = inst->out[r];
-         if (reg_id > 0) {
-            m_pending_writes[warp_id][reg_id] += n_accesses;
-         }
+
+      if (mprb_activated){
+          if (inst->isInitial()){
+              unsigned warp_id = inst->warp_id();
+              unsigned n_accesses = inst->mprb_get_transactionCount();
+              for (unsigned r = 0; r < 4; r++) {
+                  unsigned reg_id = inst->out[r];
+                  if (reg_id > 0) {
+                      m_pending_writes[warp_id][reg_id] += n_accesses;
+                  }
+              }
+          }
+      }
+
+      else {
+          unsigned warp_id = inst->warp_id();
+          unsigned n_accesses = inst->accessq_count();
+          for (unsigned r = 0; r < 4; r++) {
+              unsigned reg_id = inst->out[r];
+              if (reg_id > 0) {
+                  m_pending_writes[warp_id][reg_id] += n_accesses;
+              }
+          }
       }
    }
 
@@ -2945,7 +2966,6 @@ void ldst_unit::issue( register_set &reg_set )
 	pipelined_simd_unit::issue(reg_set);
 
     if (cycleDebug && m_sid == coreDebug){
-
         m_dispatch_reg->warp_inst_t_print(true,false,false,false,"AFTER ISSUE!");
     }
 
