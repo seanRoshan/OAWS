@@ -44,11 +44,20 @@ unsigned warp_inst_t::sm_next_uid = 0;
 
 void move_warp( warp_inst_t *&dst, warp_inst_t *&src )
 {
-   assert( dst->empty() );
+   assert( dst->empty() || (dst->mprb_get_tranactionIssuedCount()==0) );
    warp_inst_t* temp = dst;
    dst = src;
    src = temp;
    src->clear();
+}
+
+void move_warp2( warp_inst_t *&dst, warp_inst_t *&src )
+{
+    //assert( dst->empty() || (dst->mprb_get_tranactionIssuedCount()==0) );
+    warp_inst_t* temp = dst;
+    dst = src;
+    src = temp;
+    src->clear();
 }
 
 
@@ -186,6 +195,8 @@ void warp_inst_t::broadcast_barrier_reduction(const active_mask_t& access_mask)
 
 void warp_inst_t::generate_mem_accesses()
 {
+    assert(m_mem_accesses_created == false);
+
     if( empty() || op == MEMORY_BARRIER_OP || m_mem_accesses_created ) 
         return;
     if ( !((op == LOAD_OP) || (op == STORE_OP)) )
@@ -371,7 +382,8 @@ void warp_inst_t::generate_mem_accesses()
     if ( space.get_type() == global_space ) {
         ptx_file_line_stats_add_uncoalesced_gmem( pc, m_accessq.size() - starting_queue_size );
     }
-    m_mem_accesses_created=true;
+
+    m_mem_accesses_created = true;
 
 }
 
@@ -904,23 +916,6 @@ void simt_stack::update( simt_mask_t &thread_done, addr_vector_t &next_pc, addre
 
 void core_t::execute_warp_inst_t(warp_inst_t &inst, unsigned warpId)
 {
-    /*bool debugMode = false;
-
-
-    if (inst.op == LOAD_OP){
-        if (inst.active_count() < 5){
-            debugMode = true;
-        }
-    }
-
-    if (debugMode){
-        printf("DRSVR Execute_warp_inst_t Inst: %u ; ActiveCount:%u ; inst.warpId : %u ; warpId : %u mask : %s ;\n"
-                , inst.op , inst.active_count(), inst.warp_id(), warpId , inst.get_active_mask().to_string().c_str()
-        );
-        std::raise(SIGINT);
-    }*/
-
-
 
     for ( unsigned t=0; t < m_warp_size; t++ ) {
         if( inst.active(t) ) {
@@ -990,13 +985,22 @@ void core_t::deleteSIMTStack()
     }
 }
 
+void core_t::printSIMTStack()
+{
+    for(unsigned i=0; i<m_warp_count; i++){
+        printf("m_simt_stack[%u]: \n", i);
+        m_simt_stack[i]->print2();
+    }
+    printf("\n");
+}
+
 void core_t::initilizeSIMTStack(unsigned warp_count, unsigned warp_size)
 { 
     m_simt_stack = new simt_stack*[warp_count];
     for (unsigned i = 0; i < warp_count; ++i) 
         m_simt_stack[i] = new simt_stack(i,warp_size);
-    m_warp_size = warp_size;
-    m_warp_count = warp_count;
+    m_warp_size = warp_size; // warp_size = 32
+    m_warp_count = warp_count; // warp_count = 48
 }
 
 void core_t::get_pdom_stack_top_info( unsigned warpId, unsigned *pc, unsigned *rpc ) const

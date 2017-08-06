@@ -204,6 +204,7 @@ public:
         m_ibuffer[m_next].m_inst = NULL;
         m_ibuffer[m_next].m_valid = false;
     }
+
     void ibuffer_step() { m_next = (m_next+1)%IBUFFER_SIZE; }
 
     bool imiss_pending() const { return m_imiss_pending; }

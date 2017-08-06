@@ -2480,6 +2480,11 @@ public:
         m_empty=true;
         m_config=NULL;
         DRSVR_COALESCE = 0;
+        mprb_valid=false;
+        mprb_transaction_count = 0;
+        mprb_issued_transactions_count = 0;
+        mprb_serviced_transactions_count = 0;
+        initil_issue = false;
         //drsvrObj = tempObj;
     }
     warp_inst_t( const core_config *config)
@@ -2495,7 +2500,11 @@ public:
         m_cache_hit=false;
         m_is_printf=false;
         DRSVR_COALESCE = 0;
-        initil_issue = true;
+        initil_issue = false;
+        mprb_valid=false;
+        mprb_transaction_count = 0;
+        mprb_issued_transactions_count = 0;
+        mprb_serviced_transactions_count = 0;
     }
     virtual ~warp_inst_t(){
         //printf("DRSVR! %u\n", DRSVR_COALESCE);
@@ -2602,10 +2611,17 @@ public:
     }
 
     bool mprb_is_really_empty(){
-        if (mprb_serviced_transactions_count < mprb_transaction_count){
-            m_empty = false;
+
+        if ( (op==LOAD_OP) || (op==STORE_OP) ){
+            if ( (mprb_serviced_transactions_count < mprb_transaction_count) || mprb_valid){
+                m_empty = false;
+            }
         }
         return m_empty;
+    }
+
+    void mprb_make_empty(){
+        m_empty = true;
     }
 
     unsigned warp_id() const
@@ -2622,6 +2638,11 @@ public:
         else {
             return m_warp_id;
         }
+    }
+
+    unsigned get_sm_id() const
+    {
+        return m_sm_id;
     }
 
     unsigned dynamic_warp_id() const
@@ -2671,9 +2692,17 @@ public:
     }
 
     void mprb_set_transactionCount(unsigned long long input_cylce){
+
        mprb_transaction_count = accessq_count();
        mprb_serviced_transactions_count = 0;
+       mprb_issued_transactions_count = 0;
+
+
        mprb_issue_cycle_time = input_cylce;
+
+       mprb_emptyRegister = false;
+       mprb_valid = true;
+
        setInitial_issue();
     }
 
@@ -2684,12 +2713,41 @@ public:
 
     }
 
+    unsigned mprb_get_tranactionIssuedCount(){
+        return mprb_issued_transactions_count;
+    }
+
+    void mprb_transaction_issued(){
+        mprb_issued_transactions_count++;
+    }
+
     void mprb_transaction_serviced(){
         mprb_serviced_transactions_count++;
     }
 
     bool mprb_all_transactions_done(){
+
+        if (mprb_transaction_count==0){
+            return false;
+        }
+
         if (mprb_serviced_transactions_count == mprb_transaction_count){
+            mprb_make_it_invalid();
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
+
+    bool mprb_all_transactions_issued(){
+
+        if (mprb_transaction_count==0){
+            return false;
+        }
+
+
+        if (mprb_issued_transactions_count == mprb_transaction_count){
             return true;
         }
         else{
@@ -2724,15 +2782,19 @@ public:
     void warp_inst_t_print(bool info, bool out_regs, bool in_regs, bool args, const char * warp_register_name){
 
         if (info){
+
             printf("------------------------------------------------------------------------------------\n");
-            printf("%s\n[%u;%u;%u] ; op : %s ; oprnd_type : %s ; issued_cycle_time: %u ; initial_issue: %u ;\n"
-                           "interval: %u ; latency: %u ; num_regs_%u; num_operand:%u ; empty:%u ; accessq_size:%u ; Serviced: %u/%u ;\n"
+            printf("%s\n[%u;%u;%u] ; op : %s ; oprnd_type : %s ; mem_op : %s ; pipe_op : %s ; issued_cycle_time: %u ; initial_issue: %u ; mprb_valid:%u ; mprb_emptyRegister:%u ;\n"
+                           "interval: %u ; latency: %u ; num_regs_%u; num_operand:%u ; empty:%u ; accessq_size:%u ; Issued: %u/%u Serviced: %u/%u ; space: %s ; obj:%u \n"
                     , warp_register_name
-                    , m_warp_id, m_sm_id, pc, this->get_uarch_op_t_string(op), this->get_uarch_op_t_string(oprnd_type), mprb_issue_cycle_time, initil_issue
-                    , initiation_interval, latency, num_regs, num_operands, m_empty, m_accessq.size(), mprb_serviced_transactions_count, mprb_transaction_count
+                    , m_warp_id, m_sm_id, pc
+                    , this->get_uarch_op_t_string(op), this->get_uarch_op_t_string(oprnd_type), this->get_mem_operation_t_string(mem_op), this->get_operation_pipeline_t_string(op_pipe)
+                    , mprb_issue_cycle_time, initil_issue, mprb_valid, mprb_emptyRegister
+                    , initiation_interval, latency, num_regs, num_operands, m_empty, m_accessq.size()
+                    , mprb_issued_transactions_count, mprb_transaction_count
+                    , mprb_serviced_transactions_count, mprb_transaction_count, this->get_memory_space_t(space.get_type()), this
             );
         }
-
 
         if (out_regs) {
             for (unsigned i=0; i<4; i++){
@@ -2777,6 +2839,26 @@ public:
     }
 
 
+    const char* get_operation_pipeline_t_string (unsigned operation_pipeline_t) {
+        const char *operation_Names[] = {
+                "UNKOWN_OP",
+                "SP__OP",
+                "SFU__OP",
+                "MEM__OP"
+        };
+
+        return (operation_Names[operation_pipeline_t]);
+    }
+
+    const char* get_mem_operation_t_string (unsigned mem_operation_t) {
+        const char *operation_Names[] = {
+                "NOT_TEX",
+                "TEX"
+        };
+
+        return (operation_Names[mem_operation_t]);
+    }
+
     const char* get_uarch_op_t_string (unsigned uarch_op_t) {
 
         if (uarch_op_t == -1){
@@ -2801,7 +2883,7 @@ public:
     }
 
 
-    const char* get_memory_space_t (unsigned memory_space_t) {
+    const char* get_memory_space_t (unsigned memory_space_t_in) {
 
         const char *space_names[] = {
                 "undefined_space",
@@ -2819,7 +2901,7 @@ public:
                 "instruction_space"
         };
 
-        return (space_names[memory_space_t]);
+        return (space_names[memory_space_t_in]);
     }
 
     const char* get_uarch_operand_type_t_string (unsigned uarch_operand_type_t) {
@@ -2865,6 +2947,28 @@ public:
         return initil_issue;
     }
 
+    void mprb_make_it_invalid(){
+        mprb_valid = false;
+    }
+
+    bool mprb_isValid(){
+        return mprb_valid;
+    }
+
+    void mprb_registerEmpty(){
+        mprb_emptyRegister = true;
+    }
+
+    bool mprb_isRegisterEmpty(){
+        return mprb_emptyRegister;
+    }
+
+    void make_it_not_empty(){
+        m_empty = false;
+    }
+
+
+
 
 protected:
 
@@ -2901,16 +3005,18 @@ protected:
 
     bool initil_issue;
     unsigned mprb_transaction_count;
+    unsigned mprb_issued_transactions_count;
     unsigned mprb_serviced_transactions_count;
     unsigned long long mprb_issue_cycle_time;
 
-    void make_it_not_empty(){
-        m_empty = false;
-    }
+
+    bool mprb_emptyRegister; // When the register is Empty
+    bool mprb_valid; // When the queue entry is not valid (We pop it out)
 
 };
 
 void move_warp( warp_inst_t *&dst, warp_inst_t *&src );
+void move_warp2( warp_inst_t *&dst, warp_inst_t *&src );
 
 size_t get_kernel_code_size( class function_info *entry );
 
@@ -2959,6 +3065,7 @@ class core_t {
         void updateSIMTStack(unsigned warpId, warp_inst_t * inst);
         void initilizeSIMTStack(unsigned warp_count, unsigned warps_size);
         void deleteSIMTStack();
+        void printSIMTStack();
         warp_inst_t getExecuteWarp(unsigned warpId);
         void get_pdom_stack_top_info( unsigned warpId, unsigned *pc, unsigned *rpc ) const;
         kernel_info_t * get_kernel_info(){ return m_kernel;}
@@ -2987,6 +3094,17 @@ public:
 		}
 		m_name = name;
 	}
+
+
+
+    void mprb_garbage_collection(){
+        for (unsigned i=0; i<regs.size(); i++){
+            if ( (regs.at(i)->accessq_count()==0) && ( regs.at(i)->op==LOAD_OP || regs.at(i)->op==STORE_OP ) ){
+                regs.at(i)->clear();
+            }
+        }
+    }
+
 	bool has_free(){
 		for( unsigned i = 0; i < regs.size(); i++ ) {
 			if( regs[i]->empty() ) {
@@ -3011,10 +3129,17 @@ public:
 	//void copy_in( warp_inst_t* src ){
 		//   src->copy_contents_to(*get_free());
 		//}
-	void move_out_to( warp_inst_t *&dest ){
+
+    void move_out_to( warp_inst_t *&dest ){
 		warp_inst_t **ready=get_ready();
 		move_warp(dest, *ready);
 	}
+
+    void move_out_to2( warp_inst_t *&dest ){
+        warp_inst_t **ready=get_ready();
+        move_warp2(dest, *ready);
+    }
+
 
 	warp_inst_t** get_ready(){
         //printf("GET READY! regs.size():%u ; name:%s ;\n ",regs.size(), m_name);
@@ -3044,7 +3169,7 @@ public:
     void print2(bool detail) const{
         for( unsigned i = 0; i < regs.size(); i++ ) {
             if (detail){
-                if (regs[i]->get_warp_id()!=-1){
+                if (regs[i]->get_warp_id()>=0 && regs[i]->get_warp_id()<48 ){
                     printf("--------------------------------------------------------------------------------\n");
                     printf("reg[%u]:\n", i);
                     regs[i]->warp_inst_t_print(true, true, true, true, m_name);
@@ -3055,7 +3180,7 @@ public:
                 }
             }
             else {
-                if (regs[i]->get_warp_id()!=-1){
+                if (regs[i]->get_warp_id()>=0 && regs[i]->get_warp_id()<48 ){
                     printf("--------------------------------------------------------------------------------\n");
                     printf("reg[%u] = %u \n", i, regs[i]->get_warp_id());
                     printf("--------------------------------------------------------------------------------\n");
@@ -3107,6 +3232,7 @@ public:
             inputBuffer.push_back(new warp_inst_t());
         }
 
+
         // Warp Queue
         for (unsigned i = 0; i < warpQueueSize; i++) {
             warpsQueue.push_back(new warp_inst_t());
@@ -3117,20 +3243,27 @@ public:
 
     }
 
+
+
+    void fix_warpQueue(){
+        for (unsigned i=0; i<warpsQueue.size(); i++){
+            warpsQueue[i]->mprb_is_really_empty();
+        }
+    }
+
     void get_readywarp_mprb(warp_inst_t *&dest) {
 
-        dest->mprb_is_really_empty();
-
-        dest->warp_inst_t_print(true, true, true, true, "get_readywarp_mprb_before");
-        dest->accessq_print();
-        print_warpsQueue();
-        print_inputBuffer();
-        print_transaction_queue();
-
-        // Get a warps from the mprb
+        // Get a warp from the mprb
 
         // 1. Get a ready transaction
+
+        dest->warp_inst_t_print(true,true,true,true,"get_readywarp_mprb()_before");
+        print_transaction_queue();
+        print_warpsQueue();
+
+
         mem_access_t ready_transaction = transaction_pop_front();
+
 
         // 2. Search the warpQueue to find the owner warp of the ready transaction
         //    Get the warp from the warpQueue
@@ -3138,40 +3271,42 @@ public:
         //    If all transactions Serviced, remove the warp from the queue
 
         unsigned warp_id = ready_transaction.mprb_get_warp_id();
-        printf("warp_id: %u ;\n", warp_id);
+
+        printf("warp_id_before_search:%u;\n",warp_id);
 
         warp_inst_t *ready_warp = search_warpsQueue(warp_id);
 
 
 
-        ready_warp->mprb_transaction_serviced();
-        remove_doneWarp(ready_warp);
-
-
         // 3. Merge the transaction to the ready warps
 
-        ready_warp->warp_inst_t_print(true, true, true, true, "get_readywarp_mprb_after");
-        ready_warp->accessq_print();
-        print_warpsQueue();
-        print_inputBuffer();
-        print_transaction_queue();
+        if (cycleDebug && ready_warp->get_sm_id() == coreDebug){
+            ready_warp->warp_inst_t_print(true, true, true, true, "get_readywarp_mprb_after");
+            ready_warp->accessq_print();
+            print_warpsQueue();
+            print_inputBuffer();
+            print_transaction_queue();
+        }
 
-
-        //assert(ready_warp->accessq_count()==0);
-        assert(not ready_warp->empty());
-        assert(ready_transaction.mprb_get_warp_id() == ready_warp->get_warp_id());
 
         ready_warp->accessq_push_back(ready_transaction);
 
-        // 4. update the src
+        assert(not ready_warp->empty());
+        assert(ready_warp->mprb_isValid() );
+        assert(ready_transaction.mprb_get_warp_id() == ready_warp->get_warp_id());
+        assert(ready_warp->accessq_count()>0);
+
         dest = ready_warp;
 
     }
 
 
     void put_readywarp_mprb(warp_inst_t *&src, unsigned long long int input_cycle) {
-        src->warp_inst_t_print(true, false, false, false,"put_readywarp_mprb()");
-        src->accessq_print();
+
+        if (cycleDebug && src->get_sm_id() == coreDebug){
+            src->warp_inst_t_print(true, false, false, false,"put_readywarp_mprb()");
+            src->accessq_print();
+        }
         filter_split_transactions_warp(src, input_cycle);
     }
 
@@ -3258,37 +3393,48 @@ public:
 
     bool WarpQueue_has_free() {
         for (unsigned i = 0; i < warpsQueue.size(); i++) {
-            if (warpsQueue[i]->empty()) {
+            //if ( warpsQueue[i]->empty() && warpsQueue[i]->mprb_all_transactions_done() ) {
+            if (not warpsQueue[i]->mprb_isValid()){
                 return true;
             }
         }
         return false;
+    }
+
+    warp_inst_t **WarpQueue_get_free() {
+        for (unsigned i = 0; i < warpsQueue.size(); i++) {
+            //if ( warpsQueue[i]->empty() && warpsQueue[i]->mprb_all_transactions_done() ) {
+            if (not warpsQueue[i]->mprb_isValid()) {
+                return &warpsQueue[i];
+            }
+        }
+
+    print_warpsQueue();
+    assert(0 && "No free bufferQueue MPRB found!");
+    return NULL;
     }
 
     bool WarpQueue_has_ready() {
         for (unsigned i = 0; i < warpsQueue.size(); i++) {
-            if (not warpsQueue[i]->empty()) {
-                return true;
+            if (warpsQueue[i]->mprb_isValid()){
+                if (not warpsQueue[i]->mprb_all_transactions_issued()) {
+                    return true;
+                }
             }
         }
         return false;
     }
 
 
-    warp_inst_t **WarpQueue_get_free() {
-        for (unsigned i = 0; i < warpsQueue.size(); i++) {
-            if (warpsQueue[i]->empty()) {
-                return &warpsQueue[i];
-            }
-        }
-        assert(0 && "No free bufferQueue MPRB found!");
-        return NULL;
-    }
+
 
     warp_inst_t **WarpQueue_ready() {
         for (unsigned i = 0; i < warpsQueue.size(); i++) {
-            if (not warpsQueue[i]->empty()) {
-                return &warpsQueue[i];
+            if (warpsQueue[i]->mprb_isValid()){
+                if (not warpsQueue[i]->mprb_all_transactions_issued()) {
+                    warpsQueue[i]->mprb_is_really_empty();
+                    return &warpsQueue[i];
+                }
             }
         }
         assert(0 && "No ready bufferQueue MPRB found!");
@@ -3306,7 +3452,7 @@ public:
         warp_inst_t **ready = &warpsQueue[0];
         move_warp(dest, *ready);
         for (unsigned i = 0; (i + 1) < warpsQueue.size(); i++) {
-            if (not warpsQueue[i + 1]->empty()) {
+            if ( not warpsQueue[i + 1]->empty() || not warpsQueue[i + 1]->mprb_all_transactions_done() ) {
                 move_warp(warpsQueue[i], warpsQueue[i + 1]);
                 warpsQueue[i + 1] = new warp_inst_t();
             } else {
@@ -3323,8 +3469,8 @@ public:
             std::ostringstream oss;
             oss << "warpsQueue[" << i << "]";
             std::string name = oss.str();
-            if (warpsQueue[i]->empty()) {
-                printf("warpsQueue[%u] = empty ; \n", i);
+            if ( ( warpsQueue[i]->empty() ) && ( !warpsQueue[i]->mprb_isValid() ) ) {
+                printf("warpsQueue[%u] = empty ; obj:%u \n", i, warpsQueue[i]);
             } else {
                 warpsQueue[i]->warp_inst_t_print(true, false, false, false, name.c_str());
             }
@@ -3332,12 +3478,32 @@ public:
         printf("------------------------------------------------------------\n");
     }
 
+    void print_warpsQueue2() {
+        printf("MPRB WarpsQueue! Size: %u\n", warpsQueue.size());
+        printf("------------------------------------------------------------\n");
+        for (unsigned i = 0; i < warpsQueue.size(); i++) {
+            std::ostringstream oss;
+            oss << "warpsQueue[" << i << "]";
+            std::string name = oss.str();
+            warpsQueue[i]->warp_inst_t_print(true, false, false, false, name.c_str());
+        }
+        printf("------------------------------------------------------------\n");
+    }
+
 
     void filter_split_transactions_warp(warp_inst_t *&src, unsigned long long int input_cycle) {
 
-        src->warp_inst_t_print(true, true, true, true, "filter_src");
-        src->accessq_print();
-        print_inputBuffer();
+        if (cycleDebug && src->get_sm_id() == coreDebug){
+            src->warp_inst_t_print(true, true, true, true, "filter_src");
+            src->accessq_print();
+            printf("\n");
+            print_inputBuffer();
+            printf("\n");
+            print_warpsQueue();
+            printf("\n");
+            print_transaction_queue();
+            printf("\n");
+        }
 
         assert(not src->empty());
 
@@ -3365,32 +3531,45 @@ public:
             //(*free)->mprb_set_transactionCount(input_cycle);
             //(*free)->accessq_clear();
 
+
+            if (cycleDebug && (*free)->get_sm_id() == coreDebug){
+                printf("AFTER THE FILTER! SM:%u ; WARP_ID:%u\n",(*free)->get_sm_id(), (*free)->get_warp_id());
+                printf("\n");
+                print_inputBuffer();
+                printf("\n");
+                print_warpsQueue();
+                printf("\n");
+                print_transaction_queue();
+                printf("\n");
+            }
+
+            assert((*free)->get_warp_id()>=0 && (*free)->get_warp_id()<48);
+            assert((*free)->op==LOAD_OP || (*free)->op==STORE_OP);
+            assert((*free)->empty()== false);
         }
         else{
             assert(0 && "No empty WarpQueue MPRB found!");
         }
 
-        print_warpsQueue();
-        print_transaction_queue();
-        print_inputBuffer();
     }
-
 
     warp_inst_t* search_warpsQueue(unsigned warp_id){
 
         warp_inst_t * foundWarp = new warp_inst_t();
 
         for (unsigned i=0; i<warpsQueue.size(); i++){
-            if (not warpsQueue[i]->empty() ){
+            if (  ( not warpsQueue[i]->empty() ) || ( warpsQueue[i]->mprb_isValid() )  ){
                 if (warpsQueue[i]->get_warp_id() == warp_id){
                     foundWarp = warpsQueue[i];
+                    foundWarp->mprb_transaction_issued();
+                    foundWarp->mprb_is_really_empty();
                     return foundWarp;
                 }
             }
         }
 
-
-
+        print_transaction_queue();
+        print_warpsQueue();
         printf("warp_id:%u;");
 
         assert(0 && "Search Failed!");
@@ -3398,33 +3577,30 @@ public:
         return foundWarp;
     }
 
-    void remove_doneWarp(warp_inst_t* target_warp){
+    void remove_doneWarp (unsigned warp_id) {
 
-        if (not target_warp->mprb_all_transactions_done()){
+        /*if (not target_warp->mprb_all_transactions_done()){
             return;
-        }
+        }*/
 
-        unsigned warp_id = target_warp->get_warp_id();
+
+
+        //unsigned warp_id = target_warp->get_warp_id();
 
         for (unsigned i=0; i<warpsQueue.size(); i++){
-            if (warpsQueue[i]->get_warp_id() == warp_id){
-                for (unsigned j=i; j+1<warpsQueue.size(); j++){
-                    warpsQueue[j] = warpsQueue[j+1];
-                }
-                warpsQueue[warpQueueSize-1] = new warp_inst_t();
-                return;
+            if ( ( warpsQueue[i]->get_warp_id() == warp_id ) && ( not warpsQueue[i]->mprb_all_transactions_issued() ) ){
+                    assert(not warpsQueue[i]->mprb_isValid());
+                    for (unsigned j=i; j+1<warpsQueue.size(); j++){
+                        warpsQueue[j] = warpsQueue[j+1];
+                    }
+                    warpsQueue[warpQueueSize-1] = new warp_inst_t();
+                    return;
             }
         }
     }
 
 
-
     mem_access_t transaction_pop_front(){
-
-
-        /*printf("transaction_pop_front() BEFORE\n");
-        print_transaction_queue();*/
-
 
         assert(transactionsQueue.size()>0);
 
@@ -3436,35 +3612,9 @@ public:
 
         transactionsQueue.pop_back();
 
-        /*printf("transaction_pop_front() AFTER\n");
-        print_transaction_queue();*/
-
         return gready;
 
     }
-
-
-    /*void merger(warp_inst_t *&src) {
-
-        mem_access_t readyTransaction = transaction_pop_front();
-
-        unsigned warp_id = readyTransaction.mprb_get_warp_id();
-
-        warp_inst_t *drsvrWarp = search_warpsQueue(warp_id);
-        assert(drsvrWarp);
-
-        drsvrWarp->accessq_push_back(readyTransaction);
-
-        drsvrWarp->mprb_transaction_serviced();
-
-        remove_doneWarp(drsvrWarp);
-
-        drsvrWarp->warp_inst_t_print(true, false, false, false, "drsvrWarp_merger");
-
-        src = drsvrWarp;
-    }*/
-
-
 
 
     void print_transaction_queue(){
@@ -3490,6 +3640,10 @@ public:
     };
 
 private:
+
+    bool cycleDebug = true;
+    unsigned coreDebug = 4 ;
+
 
     std::vector<warp_inst_t*> inputBuffer;
     unsigned inputBufferSize = 2;
