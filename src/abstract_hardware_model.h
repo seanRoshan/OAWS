@@ -79,7 +79,7 @@ typedef unsigned long long new_addr_type;
 typedef unsigned address_type;
 typedef unsigned addr_t;
 
-// the following are operations the timing model can see 
+// the following are operations the timing model can see
 
 enum uarch_op_t {
    NO_OP=-1,
@@ -192,10 +192,10 @@ public:
    void dec_running()
    {
        assert( m_num_cores_running > 0 );
-       m_num_cores_running--; 
+       m_num_cores_running--;
    }
    bool running() const { return m_num_cores_running>0; }
-   bool done() const 
+   bool done() const
    {
        return no_more_ctas_to_run() && !running();
    }
@@ -210,31 +210,31 @@ public:
    size_t threads_per_cta() const
    {
       return m_block_dim.x * m_block_dim.y * m_block_dim.z;
-   } 
+   }
 
    dim3 get_grid_dim() const { return m_grid_dim; }
    dim3 get_cta_dim() const { return m_block_dim; }
 
-   void increment_cta_id() 
-   { 
-      increment_x_then_y_then_z(m_next_cta,m_grid_dim); 
+   void increment_cta_id()
+   {
+      increment_x_then_y_then_z(m_next_cta,m_grid_dim);
       m_next_tid.x=0;
       m_next_tid.y=0;
       m_next_tid.z=0;
    }
    dim3 get_next_cta_id() const { return m_next_cta; }
-   bool no_more_ctas_to_run() const 
+   bool no_more_ctas_to_run() const
    {
       return (m_next_cta.x >= m_grid_dim.x || m_next_cta.y >= m_grid_dim.y || m_next_cta.z >= m_grid_dim.z );
    }
 
    void increment_thread_id() { increment_x_then_y_then_z(m_next_tid,m_block_dim); }
    dim3 get_next_thread_id_3d() const  { return m_next_tid; }
-   unsigned get_next_thread_id() const 
-   { 
+   unsigned get_next_thread_id() const
+   {
       return m_next_tid.x + m_block_dim.x*m_next_tid.y + m_block_dim.x*m_block_dim.y*m_next_tid.z;
    }
-   bool more_threads_in_cta() const 
+   bool more_threads_in_cta() const
    {
       return m_next_tid.z < m_block_dim.z && m_next_tid.y < m_block_dim.y && m_next_tid.x < m_block_dim.x;
    }
@@ -265,11 +265,11 @@ private:
 };
 
 struct core_config {
-    core_config() 
-    { 
-        m_valid = false; 
-        num_shmem_bank=16; 
-        shmem_limited_broadcast = false; 
+    core_config()
+    {
+        m_valid = false;
+        num_shmem_bank=16;
+        shmem_limited_broadcast = false;
         gpgpu_shmem_sizeDefault=(unsigned)-1;
         gpgpu_shmem_sizePrefL1=(unsigned)-1;
         gpgpu_shmem_sizePrefShared=(unsigned)-1;
@@ -290,7 +290,7 @@ struct core_config {
     {
         return ((addr/WORD_SIZE) % num_shmem_bank);
     }
-    unsigned mem_warp_parts;  
+    unsigned mem_warp_parts;
     mutable unsigned gpgpu_shmem_size;
     unsigned gpgpu_shmem_sizeDefault;
     unsigned gpgpu_shmem_sizePrefL1;
@@ -416,22 +416,22 @@ struct textureReference {
 
 #endif
 
-// Struct that record other attributes in the textureReference declaration 
+// Struct that record other attributes in the textureReference declaration
 // - These attributes are passed thru __cudaRegisterTexture()
 struct textureReferenceAttr {
-    const struct textureReference *m_texref; 
-    int m_dim; 
-    enum cudaTextureReadMode m_readmode; 
-    int m_ext; 
-    textureReferenceAttr(const struct textureReference *texref, 
-                         int dim, 
-                         enum cudaTextureReadMode readmode, 
+    const struct textureReference *m_texref;
+    int m_dim;
+    enum cudaTextureReadMode m_readmode;
+    int m_ext;
+    textureReferenceAttr(const struct textureReference *texref,
+                         int dim,
+                         enum cudaTextureReadMode readmode,
                          int ext)
-    : m_texref(texref), m_dim(dim), m_readmode(readmode), m_ext(ext) 
+    : m_texref(texref), m_dim(dim), m_readmode(readmode), m_ext(ext)
     {  }
 };
 
-class gpgpu_functional_sim_config 
+class gpgpu_functional_sim_config
 {
 public:
     void reg_options(class OptionParser * opp);
@@ -471,7 +471,7 @@ public:
     void  memcpy_to_gpu( size_t dst_start_addr, const void *src, size_t count );
     void  memcpy_from_gpu( void *dst, size_t src_start_addr, size_t count );
     void  memcpy_gpu_to_gpu( size_t dst, size_t src, size_t count );
-    
+
     class memory_space *get_global_memory() { return m_global_mem; }
     class memory_space *get_tex_memory() { return m_tex_mem; }
     class memory_space *get_surf_memory() { return m_surf_mem; }
@@ -516,18 +516,18 @@ protected:
     class memory_space *m_global_mem;
     class memory_space *m_tex_mem;
     class memory_space *m_surf_mem;
-    
+
     unsigned long long m_dev_malloc;
-    
+
     std::map<std::string, const struct textureReference*> m_NameToTextureRef;
     std::map<const struct textureReference*,const struct cudaArray*> m_TextureRefToCudaArray;
     std::map<const struct textureReference*, const struct textureInfo*> m_TextureRefToTexureInfo;
     std::map<const struct textureReference*, const struct textureReferenceAttr*> m_TextureRefToAttribute;
 };
 
-struct gpgpu_ptx_sim_kernel_info 
+struct gpgpu_ptx_sim_kernel_info
 {
-   // Holds properties of the kernel (Kernel's resource use). 
+   // Holds properties of the kernel (Kernel's resource use).
    // These will be set to zero if a ptxinfo file is not present.
    int lmem;
    int smem;
@@ -558,14 +558,14 @@ public:
    memory_space_t( const enum _memory_space_t &from ) { m_type = from; m_bank = 0; }
    bool operator==( const memory_space_t &x ) const { return (m_bank == x.m_bank) && (m_type == x.m_type); }
    bool operator!=( const memory_space_t &x ) const { return !(*this == x); }
-   bool operator<( const memory_space_t &x ) const 
-   { 
+   bool operator<( const memory_space_t &x ) const
+   {
       if(m_type < x.m_type)
          return true;
       else if(m_type > x.m_type)
          return false;
       else if( m_bank < x.m_bank )
-         return true; 
+         return true;
       return false;
    }
    enum _memory_space_t get_type() const { return m_type; }
@@ -598,7 +598,7 @@ MA_TUP_BEGIN( mem_access_type ) \
    MA_TUP( L1_WR_ALLOC_R ), \
    MA_TUP( L2_WR_ALLOC_R ), \
    MA_TUP( NUM_MEM_ACCESS_TYPE ) \
-MA_TUP_END( mem_access_type ) 
+MA_TUP_END( mem_access_type )
 
 #define MA_TUP_BEGIN(X) enum X {
 #define MA_TUP(X) X
@@ -608,17 +608,17 @@ MEM_ACCESS_TYPE_TUP_DEF
 #undef MA_TUP
 #undef MA_TUP_END
 
-const char * mem_access_type_str(enum mem_access_type access_type); 
+const char * mem_access_type_str(enum mem_access_type access_type);
 
 enum cache_operator_type {
-    CACHE_UNDEFINED, 
+    CACHE_UNDEFINED,
 
     // loads
     CACHE_ALL,          // .ca
     CACHE_LAST_USE,     // .lu
     CACHE_VOLATILE,     // .cv
-                       
-    // loads and stores 
+
+    // loads and stores
     CACHE_STREAMING,    // .cs
     CACHE_GLOBAL,       // .cg
 
@@ -632,8 +632,8 @@ public:
 
    mem_access_t() { init(); }
 
-   mem_access_t( mem_access_type type, 
-                 new_addr_type address, 
+   mem_access_t( mem_access_type type,
+                 new_addr_type address,
                  unsigned size,
                  bool wr )
    {
@@ -644,10 +644,10 @@ public:
        m_write = wr;
    }
 
-   mem_access_t( mem_access_type type, 
-                 new_addr_type address, 
-                 unsigned size, 
-                 bool wr, 
+   mem_access_t( mem_access_type type,
+                 new_addr_type address,
+                 unsigned size,
+                 bool wr,
                  const active_mask_t &active_mask,
                  const mem_access_byte_mask_t &byte_mask )
     : m_warp_mask(active_mask), m_byte_mask(byte_mask)
@@ -700,7 +700,7 @@ public:
     void print2() const
     {
         //printf("addr=0x%llx, %s, size=%u, ", m_addr, m_write?"store":"load ", m_req_size );
-        printf("warp_id=%u ; addr=%u, %s, size=%u, ", mprb_wid, m_addr, m_write?"store":"load ", m_req_size );
+        printf("warp_id=%u ; uid:%u ; addr=%u, %s, size=%u, ", m_uid, mprb_wid, m_addr, m_write?"store":"load ", m_req_size );
         switch(m_type) {
             case GLOBAL_ACC_R:  printf("GLOBAL_R"); break;
             case LOCAL_ACC_R:   printf("LOCAL_R "); break;
@@ -2661,32 +2661,7 @@ public:
 
     }
 
-    void mprb_set_transactionCount(unsigned long long input_cylce){
-       mprb_transaction_count = accessq_count();
-       mprb_serviced_transactions_count = 0;
-       mprb_issue_cycle_time = input_cylce;
-    }
 
-    void mprb_transaction_serviced(){
-        mprb_serviced_transactions_count++;
-    }
-
-    unsigned mprb_get_transactionCount(){
-        return mprb_transaction_count;
-    }
-
-    bool mprb_all_transactions_done(){
-        if (mprb_serviced_transactions_count == mprb_transaction_count){
-            return true;
-        }
-        else{
-            return false;
-        }
-    }
-
-    unsigned long long mprb_get_issue_time(){
-        return  mprb_issue_cycle_time;
-    }
 
     void accessq_print(){
         unsigned i = 0;
@@ -2839,6 +2814,61 @@ public:
     unsigned get_uid() const { return m_uid; }
 
 
+    void mprb_transaction_issued(){
+        mprb_issued_transaction_count++;
+    }
+
+    void mprb_transaction_serviced(){
+        mprb_serviced_transactions_count++;
+    }
+
+    unsigned mprb_get_transactionCount(){
+        return mprb_transaction_count;
+    }
+
+    unsigned mprb_get_issued_transactionCount(){
+        return mprb_issued_transaction_count;
+    }
+
+    unsigned mprb_get_serviced_transactionCount(){
+        return mprb_serviced_transactions_count;
+    }
+
+    void mprb_set_transactionCount(unsigned long long input_cycle){
+        mprb_transaction_count = accessq_count();
+        mprb_serviced_transactions_count = 0;
+        mprb_issued_transaction_count = 0;
+        mprb_issue_cycle_time = input_cycle;
+        mprb_valid = true;
+    }
+
+
+
+
+
+    bool mprb_all_transactions_done(){
+        if ( (mprb_valid) && (mprb_transaction_count>0) ){
+            if (mprb_serviced_transactions_count == mprb_transaction_count){
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    bool mprb_all_transactions_issued(){
+        if ( (mprb_valid) && (mprb_transaction_count>0) ){
+            if (mprb_issued_transaction_count == mprb_transaction_count){
+                return true;
+            }
+        }
+        return false;
+    }
+
+    unsigned long long mprb_get_issue_time(){
+        return  mprb_issue_cycle_time;
+    }
+
 
     void setInitial_issue(){
         initil_issue = true;
@@ -2852,6 +2882,17 @@ public:
         return initil_issue;
     }
 
+    bool mprb_isValid(){
+        return mprb_valid;
+    }
+
+    void mprb_makeValid(){
+        mprb_valid = true;
+    }
+
+    void mprb_makeInValid(){
+        mprb_valid = false;
+    }
 
 protected:
 
@@ -2887,8 +2928,10 @@ protected:
 
 
     bool initil_issue;
+    bool mprb_valid;
     unsigned mprb_transaction_count;
     unsigned mprb_serviced_transactions_count;
+    unsigned mprb_issued_transaction_count;
     unsigned long long mprb_issue_cycle_time;
 
 
@@ -3081,6 +3124,39 @@ private:
 
 
 
+
+class MPRB_TRANSACTION_DATA{
+
+public:
+
+    MPRB_TRANSACTION_DATA(unsigned warp_id_in, unsigned long long issue_time_in, mem_access_t transaction_in ){
+        warp_id = warp_id_in;
+        issue_time = issue_time_in;
+        transaction = transaction_in;
+    }
+
+    unsigned get_warp_id(){
+        return warp_id;
+    }
+
+    unsigned long long get_issue_time(){
+        return issue_time;
+    }
+    
+    mem_access_t get_transaction(){
+        return transaction;
+    }
+
+private:
+
+    unsigned warp_id;
+    unsigned long long issue_time;
+    mem_access_t transaction;
+
+};
+
+
+
 class MPRB {
 
 
@@ -3097,9 +3173,12 @@ public:
         for (unsigned i = 0; i < warpQueueSize; i++) {
             warpsQueue.push_back(new warp_inst_t());
         }
+        warpsObjQueue.clear();
 
         // Transaction Queue
         transactionsQueue.clear();
+        transactionObjQueue.clear();
+
 
     }
 
@@ -3348,6 +3427,142 @@ public:
 
     }
 
+    warp_inst_t* search_ready_warp(unsigned long long issue_time, unsigned warp_id){
+
+        for (unsigned i=0; i<warpsObjQueue.size(); i++){
+            if ( (warpsObjQueue.at(i)->get_warp_id() == warp_id) && (warpsObjQueue.at(i)->mprb_get_issue_time()==issue_time) ){
+                return warpsObjQueue.at(i);
+            }
+        }
+
+
+        printf("Something is Wrong, we could not find the requested warp from the warpsQueue!\n");
+        assert(false);
+    }
+
+    void remove_all_issued_warps(){
+        for (unsigned i=0; i<warpsObjQueue.size(); i++){
+            if (warpsObjQueue.at(i)->mprb_all_transactions_issued()){
+                for (unsigned j=i; (j+1)<warpsObjQueue.size(); j++){
+                    warpsObjQueue[j] = warpsObjQueue[j+1];
+                }
+                warpsObjQueue.pop_back();
+            }
+        }
+    }
+
+
+
+    MPRB_TRANSACTION_DATA* transactionObj_pop_front(){
+
+        assert(transactionObjQueue.size()>0);
+
+        MPRB_TRANSACTION_DATA* gready_transaction = transactionObjQueue.at(0);
+
+        for (unsigned i=0; (i+1)<transactionObjQueue.size(); i++){
+            transactionObjQueue[i] = transactionObjQueue[i+1];
+        }
+
+        transactionObjQueue.pop_back();
+
+        return gready_transaction;
+
+    }
+
+
+    void set_output_ready_warp(){
+
+        assert(warpsObjQueue.size()>0);
+        assert(transactionObjQueue.size()>0);
+
+        MPRB_TRANSACTION_DATA* transaction_obj = transactionObj_pop_front();
+
+
+        unsigned long long issue_time = transaction_obj->get_issue_time();
+        unsigned warp_id = transaction_obj->get_warp_id();
+
+
+        warp_inst_t* readyWarp = search_ready_warp(issue_time, warp_id);
+
+        mem_access_t readyTransaction = transaction_obj->get_transaction();
+
+        readyWarp->accessq_push_back(readyTransaction);
+
+    }
+
+
+
+    warp_inst_t* pop_ready_warp(){
+        assert(can_get_warp());
+        set_output_ready_warp();
+        remove_all_issued_warps();
+        return output_buffer;
+    }
+
+
+
+
+
+    void push_ready_warp(warp_inst_t* input_warp){
+        assert(warpsObjQueue.size()<warpQueueSize);
+        assert(transactionObjQueue.size()<transactionQueueSize);
+        assert(input_warp->mprb_isValid());
+        input_buffer = input_warp;
+    }
+
+    void mprb_split_transactions_warp() {
+
+        assert(input_buffer->empty());
+        assert(input_buffer->mprb_isValid());
+
+        assert(can_put_warp());
+
+        unsigned warp_id = input_buffer->get_warp_id();
+        unsigned long long issue_time = input_buffer->mprb_get_issue_time();
+        std::list<mem_access_t> m_accessq = input_buffer->mprb_get_accessq_list();
+
+
+        while (m_accessq.size()>0){
+            mem_access_t transaction_element = m_accessq.front();
+            m_accessq.pop_front();
+            transaction_element.mprb_set_warp_id(warp_id);
+            MPRB_TRANSACTION_DATA* transaction_obj = new MPRB_TRANSACTION_DATA(warp_id, issue_time, transaction_element);
+            transactionObjQueue.push_back(transaction_obj);
+        }
+
+        input_buffer->accessq_clear();
+        warpsObjQueue.push_back(input_buffer);
+
+    }
+
+
+    bool can_put_warp(){
+
+        if (warpsObjQueue.size()<warpQueueSize){
+            if (transactionObjQueue.size()<transactionQueueSize){
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    bool can_get_warp(){
+
+        if (warpsObjQueue.size()>0){
+            if (transactionObjQueue.size()>0){
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
+
+
+
+
 
     void merger(warp_inst_t *&src) {
 
@@ -3406,6 +3621,14 @@ private:
 
     std::vector<mem_access_t> transactionsQueue;
     unsigned transactionQueueSize = 100;
+
+
+    std::vector<MPRB_TRANSACTION_DATA*> transactionObjQueue;
+    std::vector<warp_inst_t*> warpsObjQueue;
+
+
+    warp_inst_t* output_buffer;
+    warp_inst_t* input_buffer;
 
 };
 

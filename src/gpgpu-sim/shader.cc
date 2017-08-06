@@ -902,6 +902,7 @@ void shader_core_ctx::issue_warp2( register_set& pipe_reg_set, const warp_inst_t
             printf("\nBefore:\n");
             pipe_reg_set.print2(true);
             mprb_unit->print_inputBuffer();
+            mprb_unit->print_transaction_queue();
         }
 
 
