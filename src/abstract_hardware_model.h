@@ -700,7 +700,7 @@ public:
     void print2() const
     {
         //printf("addr=0x%llx, %s, size=%u, ", m_addr, m_write?"store":"load ", m_req_size );
-        printf("warp_id=%u ; uid:%u ; addr=%u, %s, size=%u, ", m_uid, mprb_wid, m_addr, m_write?"store":"load ", m_req_size );
+        printf("warp_id=%u ; addr=%u, %s, size=%u, ", mprb_wid, m_addr, m_write?"store":"load ", m_req_size );
         switch(m_type) {
             case GLOBAL_ACC_R:  printf("GLOBAL_R"); break;
             case LOCAL_ACC_R:   printf("LOCAL_R "); break;
@@ -712,6 +712,24 @@ public:
             case INST_ACC_R:    printf("INST    "); break;
             case L1_WRBK_ACC:   printf("L1_WRBK "); break;
             default:            printf("unknown "); break;
+        }
+    }
+
+    void print2_toFile(FILE* statFile) const
+    {
+        //printf("addr=0x%llx, %s, size=%u, ", m_addr, m_write?"store":"load ", m_req_size );
+        fprintf(statFile, "warp_id=%u ; addr=%u, %s, size=%u, ", mprb_wid, m_addr, m_write?"store":"load ", m_req_size );
+        switch(m_type) {
+            case GLOBAL_ACC_R:  fprintf(statFile,"GLOBAL_R"); break;
+            case LOCAL_ACC_R:   fprintf(statFile,"LOCAL_R "); break;
+            case CONST_ACC_R:   fprintf(statFile,"CONST   "); break;
+            case TEXTURE_ACC_R: fprintf(statFile,"TEXTURE "); break;
+            case GLOBAL_ACC_W:  fprintf(statFile,"GLOBAL_W"); break;
+            case LOCAL_ACC_W:   fprintf(statFile,"LOCAL_W "); break;
+            case L2_WRBK_ACC:   fprintf(statFile,"L2_WRBK "); break;
+            case INST_ACC_R:    fprintf(statFile,"INST    "); break;
+            case L1_WRBK_ACC:   fprintf(statFile,"L1_WRBK "); break;
+            default:            fprintf(statFile,"unknown "); break;
         }
     }
 
@@ -2481,6 +2499,14 @@ public:
         m_empty=true;
         m_config=NULL;
         DRSVR_COALESCE = 0;
+
+        mprb_valid = false;
+        mprb_transaction_count = 0;
+        mprb_issued_transaction_count = 0;
+        mprb_serviced_transactions_count = 0;
+        mprb_issue_cycle_time = 0;
+        initil_issue = true;
+
         //drsvrObj = tempObj;
     }
     warp_inst_t( const core_config *config)
@@ -2497,6 +2523,12 @@ public:
         m_is_printf=false;
         DRSVR_COALESCE = 0;
         initil_issue = true;
+        mprb_valid = false;
+        mprb_transaction_count = 0;
+        mprb_issued_transaction_count = 0;
+        mprb_serviced_transactions_count = 0;
+        mprb_issue_cycle_time = 0;
+
     }
     virtual ~warp_inst_t(){
         //printf("DRSVR! %u\n", DRSVR_COALESCE);
@@ -2682,19 +2714,55 @@ public:
         printf("------------------------------------------------------------------------------------\n");
     }
 
+    void accessq_print_toFile(FILE* statFile){
+        unsigned i = 0;
+        fprintf(statFile,"\n-------------------------- Memory Access Queue  SIZE:%u---------------------------\n",m_accessq.size());
+        for (std::list<mem_access_t>::iterator it=m_accessq.begin(); it != m_accessq.end(); ++it){
+            fprintf(statFile,"m_queue[%u]: ",i);
+            (*it).print2_toFile(statFile);
+            fprintf(statFile,"\t[%u;%u;%u] ; Active Mask:%s/%s \n"
+                    ,m_warp_id
+                    ,m_sm_id
+                    ,pc
+                    ,(*it).get_warp_mask().to_string().c_str()
+                    ,m_warp_active_mask.to_string().c_str()
+            );
+            i++;
 
-    void warp_inst_t_print(bool info, bool out_regs, bool in_regs, bool args, const char * warp_register_name){
+        }
+        fprintf(statFile,"------------------------------------------------------------------------------------\n");
+    }
+
+
+
+
+    void warp_inst_t_print(bool info, bool out_regs, bool in_regs, bool args, const char *warp_register_name){
 
         if (info){
-            printf("------------------------------------------------------------------------------------\n");
-            printf("%s\n[%u;%u;%u] ; op : %s ; oprnd_type : %s \n"
-                           "interval: %u ; latency: %u ; num_regs_%u; num_operand:%u ; empty:%u ; accessq_size:%u ; Serviced: %u/%u ;\n"
-                    , warp_register_name
-                    , m_warp_id, m_sm_id, pc, this->get_uarch_op_t_string(op), this->get_uarch_op_t_string(oprnd_type)
-                    , initiation_interval, latency, num_regs, num_operands, m_empty, m_accessq.size(), mprb_serviced_transactions_count, mprb_transaction_count
-            );
-        }
 
+            bool row1 = true;
+            bool row2 = true;
+
+            printf("------------------------------------------------------------------------------------\n");
+
+            if (row1){
+                printf("%s\n[%u;%u;%u] ; op : %s ; oprnd_type : %s ; mem_op : %s ; pipe_op : %s ; issued_cycle_time: %u ; initial_issue: %u ; mprb_valid:%u ;\n"
+                        , warp_register_name
+                        , m_warp_id, m_sm_id, pc
+                        , this->get_uarch_op_t_string(op), this->get_uarch_op_t_string(oprnd_type), this->get_mem_operation_t_string(mem_op), this->get_operation_pipeline_t_string(op_pipe)
+                        , mprb_issue_cycle_time, initil_issue, mprb_valid
+
+                );
+            }
+
+            if (row2){
+                printf("interval: %u ; latency: %u ; num_regs_%u; num_operand:%u ; empty:%u ; accessq_size:%u ; Issued: %u/%u Serviced: %u/%u ; space: %s ; obj: %u ;\n"
+                        , initiation_interval, latency, num_regs, num_operands, m_empty, m_accessq.size()
+                        , mprb_issued_transaction_count, mprb_transaction_count
+                        , mprb_serviced_transactions_count, mprb_transaction_count, this->get_memory_space_t(space.get_type()), this
+                );
+            }
+        }
 
         if (out_regs) {
             for (unsigned i=0; i<4; i++){
@@ -2712,9 +2780,70 @@ public:
 
         if (args){
             printf("pred: %u ;\t ar1: %u ; \t ; ar2: %u ;\n", pred, ar1, ar2);
+        }
+
+        if (info){
             printf("------------------------------------------------------------------------------------\n");
         }
+
     }
+
+    void warp_inst_t_print_toFile(bool info, bool out_regs, bool in_regs, bool args, const char *warp_register_name, FILE* statFile){
+
+        if (info){
+
+            bool row1 = true;
+            bool row2 = true;
+
+            fprintf(statFile,"------------------------------------------------------------------------------------\n");
+
+            if (row1){
+                fprintf(statFile,"%s\n[%u;%u;%u] ; op : %s ; oprnd_type : %s ; mem_op : %s ; pipe_op : %s ; issued_cycle_time: %u ; initial_issue: %u ; mprb_valid:%u ;\n"
+                        , warp_register_name
+                        , m_warp_id, m_sm_id, pc
+                        , this->get_uarch_op_t_string(op), this->get_uarch_op_t_string(oprnd_type), this->get_mem_operation_t_string(mem_op), this->get_operation_pipeline_t_string(op_pipe)
+                        , mprb_issue_cycle_time, initil_issue, mprb_valid
+
+                );
+            }
+
+            if (row2){
+                fprintf(statFile,"interval: %u ; latency: %u ; num_regs_%u; num_operand:%u ; empty:%u ; accessq_size:%u ; Issued: %u/%u Serviced: %u/%u ; space: %s ; obj: %u ;\n"
+                        , initiation_interval, latency, num_regs, num_operands, m_empty, m_accessq.size()
+                        , mprb_issued_transaction_count, mprb_transaction_count
+                        , mprb_serviced_transactions_count, mprb_transaction_count, this->get_memory_space_t(space.get_type()), this
+                );
+            }
+        }
+
+        if (out_regs) {
+            for (unsigned i=0; i<4; i++){
+                fprintf(statFile,"OUT[%u] = %u\t", i, out[i]);
+            }
+            fprintf(statFile,"\n");
+        }
+
+        if (in_regs){
+            for (unsigned i=0; i<4; i++){
+                fprintf(statFile,"IN[%u] = %u\t", i, in[i]);
+            }
+            fprintf(statFile,"\n");
+        }
+
+        if (args){
+            fprintf(statFile,"pred: %u ;\t ar1: %u ; \t ; ar2: %u ;\n", pred, ar1, ar2);
+        }
+
+        if (info){
+            fprintf(statFile,"------------------------------------------------------------------------------------\n");
+        }
+
+    }
+
+
+
+
+
 
 
     const char* get_special_operations_t_string (unsigned special_operations_t) {
@@ -2739,10 +2868,44 @@ public:
     }
 
 
+    const char* get_operation_pipeline_t_string (unsigned operation_pipeline_t) {
+        if (operation_pipeline_t>3){
+            printf("operation_pipeline_t: %u ;\n", operation_pipeline_t);
+            operation_pipeline_t = 0;
+        }
+        const char *operation_Names[] = {
+                "UNKOWN_OP",
+                "SP__OP",
+                "SFU__OP",
+                "MEM__OP"
+        };
+        return (operation_Names[operation_pipeline_t]);
+    }
+
+    const char* get_mem_operation_t_string (unsigned mem_operation_t) {
+
+        if (mem_operation_t>1){
+            printf("mem_operation_t :%u \n",mem_operation_t);
+            mem_operation_t = 0;
+        }
+
+        const char *operation_Names[] = {
+                "NOT_TEX",
+                "TEX"
+        };
+
+        return (operation_Names[mem_operation_t]);
+    }
+
     const char* get_uarch_op_t_string (unsigned uarch_op_t) {
 
         if (uarch_op_t == -1){
             return "NO_OP";
+        }
+
+        if (uarch_op_t>10){
+            printf("uarch_op_t : %u ;\n", uarch_op_t);
+            uarch_op_t = 0;
         }
 
         const char *operation_Names[] = {
@@ -2763,7 +2926,13 @@ public:
     }
 
 
-    const char* get_memory_space_t (unsigned memory_space_t) {
+    const char* get_memory_space_t (unsigned memory_space_t_in) {
+
+        if (memory_space_t_in>12){
+            printf("memory_space_t_in : %u ;\n", memory_space_t_in);
+            memory_space_t_in = 0;
+        }
+
 
         const char *space_names[] = {
                 "undefined_space",
@@ -2781,7 +2950,7 @@ public:
                 "instruction_space"
         };
 
-        return (space_names[memory_space_t]);
+        return (space_names[memory_space_t_in]);
     }
 
     const char* get_uarch_operand_type_t_string (unsigned uarch_operand_type_t) {
@@ -2798,6 +2967,7 @@ public:
 
         return (uarch_operand_type_t_names[uarch_operand_type_t]);
     }
+
 
     bool dispatch_delay()
     {
@@ -3093,6 +3263,31 @@ public:
         }
     }
 
+
+    void print2_toFile(bool detail, FILE* statFile) const{
+        for( unsigned i = 0; i < regs.size(); i++ ) {
+            if (detail){
+                if (regs[i]->get_warp_id()!=-1){
+                    fprintf(statFile,"--------------------------------------------------------------------------------\n");
+                    fprintf(statFile,"reg[%u]:\n", i);
+                    regs[i]->warp_inst_t_print_toFile(true, true, true, true, m_name, statFile);
+                    if ( regs[i]->accessq_count()>0){
+                        regs[i]->accessq_print_toFile(statFile);
+                    }
+                    fprintf(statFile,"--------------------------------------------------------------------------------\n");
+                }
+            }
+            else {
+                if (regs[i]->get_warp_id()!=-1){
+                    fprintf(statFile,"--------------------------------------------------------------------------------\n");
+                    fprintf(statFile,"reg[%u] = %u \n", i, regs[i]->get_warp_id());
+                    fprintf(statFile,"--------------------------------------------------------------------------------\n");
+                }
+            }
+        }
+    }
+
+
 	warp_inst_t ** get_free(){
 		for( unsigned i = 0; i < regs.size(); i++ ) {
 			if( regs[i]->empty() ) {
@@ -3142,7 +3337,7 @@ public:
     unsigned long long get_issue_time(){
         return issue_time;
     }
-    
+
     mem_access_t get_transaction(){
         return transaction;
     }
@@ -3436,6 +3631,13 @@ public:
         }
 
 
+        printf("warp_id:%u ; issue_time:%llu ; transactionQueueSize:%u ; warpObjQueue.size:%u ;\n", warp_id, issue_time, transactionObjQueue.size(), warpsObjQueue.size());
+
+        print_warpObj_queue();
+
+        //print_transactionObj_queue();
+        //print_warpObj_queue();
+
         printf("Something is Wrong, we could not find the requested warp from the warpsQueue!\n");
         assert(false);
     }
@@ -3481,19 +3683,25 @@ public:
         unsigned long long issue_time = transaction_obj->get_issue_time();
         unsigned warp_id = transaction_obj->get_warp_id();
 
+        transaction_obj->get_transaction().print2();
+
+
 
         warp_inst_t* readyWarp = search_ready_warp(issue_time, warp_id);
 
+        readyWarp->mprb_transaction_issued();
+
         mem_access_t readyTransaction = transaction_obj->get_transaction();
 
-        readyWarp->accessq_push_back(readyTransaction);
+        output_buffer = (*readyWarp);
 
+        output_buffer.accessq_push_back(readyTransaction);
     }
 
 
 
-    warp_inst_t* pop_ready_warp(){
-        assert(can_get_warp());
+    warp_inst_t pop_ready_warp(){
+        assert(can_pop_warp());
         set_output_ready_warp();
         remove_all_issued_warps();
         return output_buffer;
@@ -3507,15 +3715,17 @@ public:
         assert(warpsObjQueue.size()<warpQueueSize);
         assert(transactionObjQueue.size()<transactionQueueSize);
         assert(input_warp->mprb_isValid());
-        input_buffer = input_warp;
+        input_buffer = new warp_inst_t();
+        *input_buffer = *input_warp;
+        mprb_split_transactions_warp();
     }
 
     void mprb_split_transactions_warp() {
 
-        assert(input_buffer->empty());
+        assert(not input_buffer->empty());
         assert(input_buffer->mprb_isValid());
 
-        assert(can_put_warp());
+        assert(can_push_warp());
 
         unsigned warp_id = input_buffer->get_warp_id();
         unsigned long long issue_time = input_buffer->mprb_get_issue_time();
@@ -3531,12 +3741,17 @@ public:
         }
 
         input_buffer->accessq_clear();
+
         warpsObjQueue.push_back(input_buffer);
 
     }
 
 
-    bool can_put_warp(){
+
+
+
+
+    bool can_push_warp(){
 
         if (warpsObjQueue.size()<warpQueueSize){
             if (transactionObjQueue.size()<transactionQueueSize){
@@ -3547,7 +3762,7 @@ public:
         return false;
     }
 
-    bool can_get_warp(){
+    bool can_pop_warp(){
 
         if (warpsObjQueue.size()>0){
             if (transactionObjQueue.size()>0){
@@ -3587,6 +3802,76 @@ public:
     }
 
 
+    void print_transactionObj_queue(){
+        printf("------------------------------------------------------------\n");
+        printf("MPRB Transaction Queue! Size: %u\n", transactionObjQueue.size());
+        printf("------------------------------------------------------------\n");
+        for (unsigned i=0; i<transactionObjQueue.size(); i++){
+            printf("transaction_queue[%u] : ", i);
+            transactionObjQueue.at(i)->get_transaction().print2();
+            printf(" issued_time: %llu ;", transactionObjQueue.at(i)->get_issue_time());
+            printf("\n");
+        }
+        printf("------------------------------------------------------------\n");
+    }
+
+
+    void print_transactionObj_queue_toFile(FILE* statFile){
+        fprintf(statFile,"------------------------------------------------------------\n");
+        fprintf(statFile,"MPRB Transaction Queue! Size: %u\n", transactionObjQueue.size());
+        fprintf(statFile,"------------------------------------------------------------\n");
+        for (unsigned i=0; i<transactionObjQueue.size(); i++){
+            fprintf(statFile,"transaction_queue[%u] : ", i);
+            transactionObjQueue.at(i)->get_transaction().print2_toFile(statFile);
+            fprintf(statFile," issued_time: %llu ;", transactionObjQueue.at(i)->get_issue_time());
+            fprintf(statFile,"\n");
+        }
+        fprintf(statFile,"------------------------------------------------------------\n");
+    }
+
+
+    void print_warpObj_queue(){
+        printf("------------------------------------------------------------\n");
+        printf("MPRB WarpsQueue! Size: %u\n", warpsObjQueue.size());
+        printf("------------------------------------------------------------\n");
+        for (unsigned i=0; i<warpsObjQueue.size(); i++){
+            std::ostringstream oss;
+            oss << "warpsQueue[" << i << "]";
+            std::string name = oss.str();
+            if (warpsObjQueue[i]->mprb_isValid()){
+                warpsObjQueue[i]->warp_inst_t_print(true, false, false, false, name.c_str());
+            }
+            else {
+                printf("Something is Wrong!");
+                assert(false);
+            }
+
+        }
+        printf("------------------------------------------------------------\n");
+    }
+
+
+    void print_warpObj_queue_toFile(FILE* statFile){
+        fprintf(statFile,"------------------------------------------------------------\n");
+        fprintf(statFile,"MPRB WarpsQueue! Size: %u\n", warpsObjQueue.size());
+        fprintf(statFile,"------------------------------------------------------------\n");
+        for (unsigned i=0; i<warpsObjQueue.size(); i++){
+            std::ostringstream oss;
+            oss << "warpsQueue[" << i << "]";
+            std::string name = oss.str();
+            if (warpsObjQueue[i]->mprb_isValid()){
+                warpsObjQueue[i]->warp_inst_t_print_toFile(true, false, false, false, name.c_str(), statFile);
+            }
+            else {
+                fprintf(statFile,"Something is Wrong!");
+                assert(false);
+            }
+
+        }
+        fprintf(statFile,"------------------------------------------------------------\n");
+    }
+
+
 
 
     void print_transaction_queue(){
@@ -3599,6 +3884,9 @@ public:
         }
         printf("------------------------------------------------------------\n");
     }
+
+
+
 
 
     enum drainPolicy{
@@ -3627,8 +3915,8 @@ private:
     std::vector<warp_inst_t*> warpsObjQueue;
 
 
-    warp_inst_t* output_buffer;
-    warp_inst_t* input_buffer;
+    warp_inst_t output_buffer;
+    warp_inst_t *input_buffer;
 
 };
 
@@ -3666,6 +3954,9 @@ private:
     unsigned missPrediction;
 
 
+    FILE *statFile;
+
+
 
 
 public:
@@ -3697,6 +3988,15 @@ public:
         stats_kernels_obj_global_aggr = new DRSVRSTATS(d_sm_id, warpPerSM);
 
         this->initialize_stats_warps_obj_vector(false);
+
+
+        std::ostringstream oss;
+
+        oss << "/home/svali003/testbench/Benchmarks/OAWS_DEBUG/"<<"statFile_"<<input_sm_id<<".drsvr";
+        std::string name = oss.str();
+
+        statFile = fopen(name.c_str(),"w");
+
     }
 
 
@@ -3705,6 +4005,9 @@ public:
     }
 
 
+    FILE* getStatFile(){
+        return statFile;
+    }
 
     void initialize_stats_warps_obj_vector(bool bankIt){
 

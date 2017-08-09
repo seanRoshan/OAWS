@@ -357,6 +357,7 @@ public:
         if (smObjLoaded==false){
             smObj = drsvrObj;
             smObjLoaded = true;
+
         }
     }
 

@@ -570,12 +570,15 @@ gpgpu_sim::gpgpu_sim( const gpgpu_sim_config &config )
 
 
 ///ADDED BEGIN
-
-
-
     // DRSVR initialize smObj Vector
     this->init_smObjVector();
+
     dlcFile = fopen("dlcFile.drsvr","w");
+
+
+
+
+
 
 ///DRSVR ADDED END
 
