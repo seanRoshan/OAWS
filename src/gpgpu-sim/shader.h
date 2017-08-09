@@ -1312,6 +1312,20 @@ protected:
         printf("*******************************************************************************\n");
     }
 
+    void print_pending_writes_toFile(FILE* statFile){
+        fprintf(statFile,"********************************PENDING WRITES*********************************\n");
+        for (unsigned j=0; j<m_pending_writes.size(); j++){
+            for (unsigned i=0; i<m_pending_writes[j].size(); i++){
+                if(m_pending_writes[j][i]>0)
+                    fprintf(statFile,"\t m_pending_writes[WID:%u][REG#:%u] = %u \n", j, i ,m_pending_writes[j][i]);
+            }
+        }
+        fprintf(statFile,"*******************************************************************************\n");
+    }
+
+
+
+
 protected:
    bool shared_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);
    bool constant_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);

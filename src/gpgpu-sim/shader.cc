@@ -1642,11 +1642,11 @@ void scheduler_unit::cycle()
         m_shader->issue_warp_mprb(*m_mem_out, pI_temp, active_mask_temp, warp_id, smObj->global_MPRB_obj);
 
 
-        fprintf(smObj->getStatFile(),"ISSUE_STAGE_1; cycle:%llu ;\n",gpu_sim_cycle);
+        fprintf(smObj->getStatFile(),"\n\n\nISSUE_STAGE_1; cycle:%llu ;\n",gpu_sim_cycle);
         m_mem_out->print2_toFile(true,smObj->getStatFile());
         smObj->global_MPRB_obj->print_warpObj_queue_toFile(smObj->getStatFile());
         smObj->global_MPRB_obj->print_transactionObj_queue_toFile(smObj->getStatFile());
-        fprintf(smObj->getStatFile(),"\n\n\n");
+        fprintf(smObj->getStatFile(),"\n");
 
     }
 
@@ -1805,11 +1805,11 @@ void scheduler_unit::cycle()
                                printf("ISSUE_STAGE_2\n");
                                m_shader->issue_warp_mprb(*m_mem_out, pI, active_mask, warp_id, smObj->global_MPRB_obj);
 
-                               fprintf(smObj->getStatFile(),"ISSUE_STAGE_2; cycle:%llu ;\n",gpu_sim_cycle);
+                               fprintf(smObj->getStatFile(),"\n\n\nISSUE_STAGE_2; cycle:%llu ;\n",gpu_sim_cycle);
                                m_mem_out->print2_toFile(true,smObj->getStatFile());
                                smObj->global_MPRB_obj->print_warpObj_queue_toFile(smObj->getStatFile());
                                smObj->global_MPRB_obj->print_transactionObj_queue_toFile(smObj->getStatFile());
-                               fprintf(smObj->getStatFile(),"\n\n\n");
+                               fprintf(smObj->getStatFile(),"\n");
 
 
 
@@ -3043,17 +3043,22 @@ void ldst_unit::issue( register_set &reg_set )
             if (inst->is_load() and inst->space.get_type() != shared_space) {
                 unsigned warp_id = inst->warp_id();
                 unsigned n_accesses = inst->mprb_get_transactionCount();
-                fprintf(smObj->getStatFile(),"ldst_unit::issue() ; n_accesses: %u ;\n", n_accesses);
                 for (unsigned r = 0; r < 4; r++) {
                     unsigned reg_id = inst->out[r];
                     if (reg_id > 0) {
                         m_pending_writes[warp_id][reg_id] += n_accesses;
                     }
                 }
+                fprintf(smObj->getStatFile(),"ldst_unit::issue(); initial_issue = true; n_accesses: %u ; cycle:%llu ;\n", n_accesses, gpu_sim_cycle);
+                reg_set.print2_toFile(true,smObj->getStatFile());
+                fprintf(smObj->getStatFile(),"\n");
+                print_pending_writes_toFile(smObj->getStatFile());
             }
         } else {
-            fprintf(smObj->getStatFile(),"ldst_unit::issue();\n\n");
-            inst->warp_inst_t_print_toFile(true, true, true ,true,"inst",smObj->getStatFile());
+            fprintf(smObj->getStatFile(),"ldst_unit::issue(); initial_issue = false; cycle:%llu ;\n", gpu_sim_cycle);
+            reg_set.print2_toFile(true,smObj->getStatFile());
+            fprintf(smObj->getStatFile(),"\n");
+            print_pending_writes_toFile(smObj->getStatFile());
         }
     }
     else {
@@ -3102,6 +3107,10 @@ void ldst_unit::issue( register_set &reg_set )
         printf("\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n\n");
     }
 
+    pipelined_simd_unit::m_dispatch_reg->warp_inst_t_print_toFile(true,true,true,true,"m_dispatch_reg",smObj->getStatFile());
+
+
+
 }
 
 void ldst_unit::writeback()
@@ -3112,6 +3121,9 @@ void ldst_unit::writeback()
         printf("DRSVR ldst_unit::writeback() SID:%u\n", m_sid);
     }
 
+
+    fprintf(smObj->getStatFile(), "\nDRSVR ldst_unit::writeback() SID:%u ; cycle:%llu ;\n", m_sid, gpu_sim_cycle);
+    m_next_wb.warp_inst_t_print_toFile(true,true,true,true,"m_next_wb",smObj->getStatFile());
 
     // process next instruction that is going to writeback
     if( !m_next_wb.empty() ) {
@@ -3242,16 +3254,33 @@ void ldst_unit::cycle()
    }
 
 
+
+   fprintf(smObj->getStatFile(), "\n\nDRSVR ldst_unit::cycle() SID:%u ; cycle:%llu ;\n", m_sid, gpu_sim_cycle);
+
+   m_dispatch_reg->warp_inst_t_print_toFile(true,true,true,true,"m_dispatch_register_before_writeback()",smObj->getStatFile());
+
    writeback();
 
+   // PUT WARP IN OC_EX_MEM
    m_operand_collector->step();
+
+   fprintf(smObj->getStatFile(), "\n m_operand_collector->step() ; cycle:%llu ; m_pipeline_depth:%u ;\n", gpu_sim_cycle, m_pipeline_depth);
+
+   for (unsigned i=0; i<m_pipeline_depth; i++){
+       if (m_pipeline_reg[i]->empty())
+           continue;
+       std::ostringstream oss;
+       oss << "m_pipeline_reg[" << i <<"] = " ;
+       std::string s = oss.str();
+       m_pipeline_reg[i]->warp_inst_t_print_toFile(true,true,true,true,s.c_str(),smObj->getStatFile());
+       fprintf(smObj->getStatFile(),"\n");
+   }
 
 
    // DRSVR NOTE: FOR BFS 0 REGISTERS WERE ALWAYS EMPTY
    for( unsigned stage=0; (stage+1)<m_pipeline_depth; stage++ ) 
        if( m_pipeline_reg[stage]->empty() && !m_pipeline_reg[stage+1]->empty() )
             move_warp(m_pipeline_reg[stage], m_pipeline_reg[stage+1]);
-
 
 
    if( !m_response_fifo.empty() ) {
