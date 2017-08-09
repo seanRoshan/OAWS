@@ -3704,6 +3704,12 @@ public:
         assert(can_pop_warp());
         set_output_ready_warp();
         remove_all_issued_warps();
+        if (output_buffer.mprb_get_issued_transactionCount()==1){
+            output_buffer.setInitial_issue();
+        }
+        else {
+            output_buffer.resetInitial_issue();
+        }
         return output_buffer;
     }
 

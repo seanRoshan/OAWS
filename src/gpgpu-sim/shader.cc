@@ -3030,21 +3030,49 @@ ldst_unit::ldst_unit( mem_fetch_interface *icnt,
 void ldst_unit::issue( register_set &reg_set )
 {
 
+    bool mprb_activated = true;
+
     warp_inst_t* inst = *(reg_set.get_ready());
 
    // record how many pending register writes/memory accesses there are for this instruction
    assert(inst->empty() == false);
 
-   if (inst->is_load() and inst->space.get_type() != shared_space) {
-      unsigned warp_id = inst->warp_id();
-      unsigned n_accesses = inst->accessq_count();
-      for (unsigned r = 0; r < 4; r++) {
-         unsigned reg_id = inst->out[r];
-         if (reg_id > 0) {
-            m_pending_writes[warp_id][reg_id] += n_accesses;
-         }
-      }
-   }
+
+    if (mprb_activated){
+        if (inst->isInitial()){
+            if (inst->is_load() and inst->space.get_type() != shared_space) {
+                unsigned warp_id = inst->warp_id();
+                unsigned n_accesses = inst->mprb_get_transactionCount();
+                fprintf(smObj->getStatFile(),"ldst_unit::issue() ; n_accesses: %u ;\n", n_accesses);
+                for (unsigned r = 0; r < 4; r++) {
+                    unsigned reg_id = inst->out[r];
+                    if (reg_id > 0) {
+                        m_pending_writes[warp_id][reg_id] += n_accesses;
+                    }
+                }
+            }
+        } else {
+            fprintf(smObj->getStatFile(),"ldst_unit::issue();\n\n");
+            inst->warp_inst_t_print_toFile(true, true, true ,true,"inst",smObj->getStatFile());
+        }
+    }
+    else {
+        if (inst->is_load() and inst->space.get_type() != shared_space) {
+            unsigned warp_id = inst->warp_id();
+            unsigned n_accesses = inst->accessq_count();
+            for (unsigned r = 0; r < 4; r++) {
+                unsigned reg_id = inst->out[r];
+                if (reg_id > 0) {
+                    m_pending_writes[warp_id][reg_id] += n_accesses;
+                }
+            }
+        }
+    }
+
+
+
+
+
 
 	inst->op_pipe=MEM__OP;
 	// stat collection
