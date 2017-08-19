@@ -1962,7 +1962,6 @@ public:
     friend class TwoLevelScheduler;
     friend class LooseRoundRobbinScheduler;
     void issue_warp( register_set& warp, const warp_inst_t *pI, const active_mask_t &active_mask, unsigned warp_id);
-    void issue_warp2( register_set& warp, const warp_inst_t *pI, const active_mask_t &active_mask, unsigned warp_id, MPRB* mprb_unit);
     void issue_warp_mprb( register_set& warp, const warp_inst_t *pI, const active_mask_t &active_mask, unsigned warp_id, MPRB* mprb_unit);
     void func_exec_inst( warp_inst_t &inst );
     void func_exec_inst_noCoal( warp_inst_t &inst );

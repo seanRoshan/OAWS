@@ -597,7 +597,8 @@ MA_TUP_BEGIN( mem_access_type ) \
    MA_TUP( INST_ACC_R ), \
    MA_TUP( L1_WR_ALLOC_R ), \
    MA_TUP( L2_WR_ALLOC_R ), \
-   MA_TUP( NUM_MEM_ACCESS_TYPE ) \
+   MA_TUP( NUM_MEM_ACCESS_TYPE ), \
+   MA_TUP( MPRB_DUMMY ) \
 MA_TUP_END( mem_access_type )
 
 #define MA_TUP_BEGIN(X) enum X {
@@ -693,6 +694,7 @@ public:
        case L2_WRBK_ACC:   fprintf(fp,"L2_WRBK "); break;
        case INST_ACC_R:    fprintf(fp,"INST    "); break;
        case L1_WRBK_ACC:   fprintf(fp,"L1_WRBK "); break;
+       case MPRB_DUMMY:    fprintf(fp,"DUMMY   "); break;
        default:            fprintf(fp,"unknown "); break;
        }
    }
@@ -711,6 +713,7 @@ public:
             case L2_WRBK_ACC:   printf("L2_WRBK "); break;
             case INST_ACC_R:    printf("INST    "); break;
             case L1_WRBK_ACC:   printf("L1_WRBK "); break;
+            case MPRB_DUMMY:    printf("DUMMY   "); break;
             default:            printf("unknown "); break;
         }
     }
@@ -729,6 +732,7 @@ public:
             case L2_WRBK_ACC:   fprintf(statFile,"L2_WRBK "); break;
             case INST_ACC_R:    fprintf(statFile,"INST    "); break;
             case L1_WRBK_ACC:   fprintf(statFile,"L1_WRBK "); break;
+            case MPRB_DUMMY:    fprintf(statFile,"DUMMY   "); break;
             default:            fprintf(statFile,"unknown "); break;
         }
     }
@@ -3006,14 +3010,14 @@ public:
 
     void mprb_set_transactionCount(unsigned long long input_cycle){
         mprb_transaction_count = accessq_count();
+        if (mprb_transaction_count==0){
+            mprb_transaction_count = 1 ; // DUMMY TRANSACTION
+        }
         mprb_serviced_transactions_count = 0;
         mprb_issued_transaction_count = 0;
         mprb_issue_cycle_time = input_cycle;
         mprb_valid = true;
     }
-
-
-
 
 
     bool mprb_all_transactions_done(){
@@ -3032,6 +3036,10 @@ public:
                 return true;
             }
         }
+        /*if ( (mprb_valid) && (mprb_transaction_count==0) && (mprb_issued_transaction_count==1)){
+            assert(initil_issue==true);
+            return true;
+        }*/
         return false;
     }
 
@@ -3324,10 +3332,11 @@ class MPRB_TRANSACTION_DATA{
 
 public:
 
-    MPRB_TRANSACTION_DATA(unsigned warp_id_in, unsigned long long issue_time_in, mem_access_t transaction_in ){
+    MPRB_TRANSACTION_DATA(unsigned warp_id_in, unsigned long long issue_time_in, mem_access_t transaction_in, const char* space_in ){
         warp_id = warp_id_in;
         issue_time = issue_time_in;
         transaction = transaction_in;
+        space = space_in;
     }
 
     unsigned get_warp_id(){
@@ -3336,6 +3345,10 @@ public:
 
     unsigned long long get_issue_time(){
         return issue_time;
+    }
+
+    const char * get_space(){
+        return space;
     }
 
     mem_access_t get_transaction(){
@@ -3348,6 +3361,8 @@ private:
     unsigned long long issue_time;
     mem_access_t transaction;
 
+    const char* space;
+
 };
 
 
@@ -3358,269 +3373,10 @@ class MPRB {
 public:
 
     MPRB() {
-
-        // Input Buffer
-        for (unsigned i = 0; i < inputBufferSize; i++) {
-            inputBuffer.push_back(new warp_inst_t());
-        }
-
-        // Warp Queue
-        for (unsigned i = 0; i < warpQueueSize; i++) {
-            warpsQueue.push_back(new warp_inst_t());
-        }
         warpsObjQueue.clear();
-
-        // Transaction Queue
-        transactionsQueue.clear();
         transactionObjQueue.clear();
-
-
     }
 
-
-    // Input Buffer Functions
-    bool buffer_has_free() {
-        for (unsigned i = 0; i < inputBuffer.size(); i++) {
-            if (inputBuffer[i]->empty()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    bool buffer_has_ready() {
-        for (unsigned i = 0; i < inputBuffer.size(); i++) {
-            if (not inputBuffer[i]->empty()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-
-    warp_inst_t **buffer_get_free() {
-        for (unsigned i = 0; i < inputBuffer.size(); i++) {
-            if (inputBuffer[i]->empty()) {
-                return &inputBuffer[i];
-            }
-        }
-        assert(0 && "No free bufferQueue MPRB found!");
-        return NULL;
-    }
-
-    warp_inst_t **buffer_get_ready() {
-        for (unsigned i = 0; i < inputBuffer.size(); i++) {
-            if (not inputBuffer[i]->empty()) {
-                return &inputBuffer[i];
-            }
-        }
-        assert(0 && "No ready bufferQueue MPRB found!");
-        return NULL;
-    }
-
-
-    void fill_in_inputBuffer(warp_inst_t *&src) {
-        warp_inst_t **free = buffer_get_free();
-        move_warp(*free, src);
-    }
-
-
-    void get_out_inputBuffer(warp_inst_t *&dest) {
-        //warp_inst_t **ready=buffer_get_ready();
-        warp_inst_t **ready = &inputBuffer[0];
-        move_warp(dest, *ready);
-        for (unsigned i = 0; (i + 1) < inputBuffer.size(); i++) {
-            if (not inputBuffer[i + 1]->empty()) {
-                move_warp(inputBuffer[i], inputBuffer[i + 1]);
-                inputBuffer[i + 1] = new warp_inst_t();
-            } else {
-                inputBuffer[i] = new warp_inst_t();
-            }
-        }
-    }
-
-
-    void print_inputBuffer() {
-        for (unsigned i = 0; i < inputBuffer.size(); i++) {
-            std::ostringstream oss;
-            oss << "input_buffer[" << i << "]";
-            std::string name = oss.str();
-            if (inputBuffer[i]->empty()) {
-                printf("input_buffer[%u] = empty ; \n", i);
-            } else {
-                inputBuffer[i]->warp_inst_t_print(true, false, false, false, name.c_str());
-            }
-        }
-    }
-
-
-
-
-    // WarpQueue Buffer Functions
-
-    bool WarpQueue_has_free() {
-        for (unsigned i = 0; i < warpsQueue.size(); i++) {
-            if (warpsQueue[i]->empty()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    bool WarpQueue_has_ready() {
-        for (unsigned i = 0; i < warpsQueue.size(); i++) {
-            if (not warpsQueue[i]->empty()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-
-    warp_inst_t **WarpQueue_get_free() {
-        for (unsigned i = 0; i < warpsQueue.size(); i++) {
-            if (warpsQueue[i]->empty()) {
-                return &warpsQueue[i];
-            }
-        }
-        assert(0 && "No free bufferQueue MPRB found!");
-        return NULL;
-    }
-
-    warp_inst_t **WarpQueue_ready() {
-        for (unsigned i = 0; i < warpsQueue.size(); i++) {
-            if (not warpsQueue[i]->empty()) {
-                return &warpsQueue[i];
-            }
-        }
-        assert(0 && "No ready bufferQueue MPRB found!");
-        return NULL;
-    }
-
-
-    void fill_in_warpsQueue(warp_inst_t *&src) {
-        warp_inst_t **free = WarpQueue_get_free();
-        move_warp(*free, src);
-    }
-
-    void get_out_warpsQueue(warp_inst_t *&dest) {
-        //warp_inst_t **ready=buffer_get_ready();
-        warp_inst_t **ready = &warpsQueue[0];
-        move_warp(dest, *ready);
-        for (unsigned i = 0; (i + 1) < warpsQueue.size(); i++) {
-            if (not warpsQueue[i + 1]->empty()) {
-                move_warp(warpsQueue[i], warpsQueue[i + 1]);
-                warpsQueue[i + 1] = new warp_inst_t();
-            } else {
-                warpsQueue[i] = new warp_inst_t();
-            }
-        }
-    }
-
-
-    void print_warpsQueue() {
-        printf("MPRB WarpsQueue! Size: %u\n", warpsQueue.size());
-        printf("------------------------------------------------------------\n");
-        for (unsigned i = 0; i < warpsQueue.size(); i++) {
-            std::ostringstream oss;
-            oss << "warpsQueue[" << i << "]";
-            std::string name = oss.str();
-            if (warpsQueue[i]->empty()) {
-                printf("warpsQueue[%u] = empty ; \n", i);
-            } else {
-                warpsQueue[i]->warp_inst_t_print(true, false, false, false, name.c_str());
-            }
-        }
-        printf("------------------------------------------------------------\n");
-    }
-
-
-    void filter_split_transactions_warp(warp_inst_t *&src) {
-
-        assert(!src->empty());
-
-        unsigned warp_id = src->get_warp_id();
-
-        std::list<mem_access_t> m_accessq = src->mprb_get_accessq_list();
-
-        std::list<mem_access_t>::iterator it;
-
-        for (it = m_accessq.begin(); it != m_accessq.end(); it++) {
-            (*it).mprb_set_warp_id(warp_id);
-            transactionsQueue.push_back(*it);
-        }
-
-        if (WarpQueue_has_free()) {
-            warp_inst_t **free = WarpQueue_get_free();
-            **free = *src;
-            (*free)->mprb_set_transactionCount(0);
-            (*free)->accessq_clear();
-        }
-
-        printf("\n\n");
-        print_transaction_queue();
-        printf("\n\n");
-        print_warpsQueue();
-
-        printf("\n\n");
-        merger(src);
-        printf("\n\n");
-
-        print_transaction_queue();
-        printf("\n\n");
-        print_warpsQueue();
-        printf("\n\n");
-
-
-    }
-
-
-    warp_inst_t* search_warpsQueue(unsigned warp_id){
-
-        warp_inst_t * foundWarp = new warp_inst_t();
-
-        for (unsigned i=0; i<warpsQueue.size(); i++){
-            if (not warpsQueue[i]->empty()){
-                if (warpsQueue[i]->get_warp_id() == warp_id){
-                    warpsQueue[i]->warp_inst_t_print(true, false, false, false, "search");
-                    foundWarp = warpsQueue[i];
-                    return foundWarp;
-                }
-            }
-        }
-
-        return foundWarp;
-    }
-
-    void remove_doneWarp(unsigned warp_id){
-        for (unsigned i=0; i<warpsQueue.size(); i++){
-            if (warpsQueue[i]->get_warp_id() == warp_id){
-                for (unsigned j=i; j+1<warpsQueue.size(); j++){
-                    warpsQueue[j] = warpsQueue[j+1];
-                }
-                warpsQueue.pop_back();
-                return;
-            }
-        }
-    }
-
-
-
-    mem_access_t transaction_pop_front(){
-
-        assert(transactionsQueue.size()>0);
-
-        mem_access_t gready = transactionsQueue.at(0);
-
-        for (unsigned i=0; (i+1)<transactionsQueue.size(); i++){
-            transactionsQueue[i] = transactionsQueue[i+1];
-        }
-
-        transactionsQueue.pop_back();
-
-        return gready;
-
-    }
 
     warp_inst_t* search_ready_warp(unsigned long long issue_time, unsigned warp_id){
 
@@ -3629,7 +3385,6 @@ public:
                 return warpsObjQueue.at(i);
             }
         }
-
 
         printf("warp_id:%u ; issue_time:%llu ; transactionQueueSize:%u ; warpObjQueue.size:%u ;\n", warp_id, issue_time, transactionObjQueue.size(), warpsObjQueue.size());
 
@@ -3685,8 +3440,6 @@ public:
 
         transaction_obj->get_transaction().print2();
 
-
-
         warp_inst_t* readyWarp = search_ready_warp(issue_time, warp_id);
 
         readyWarp->mprb_transaction_issued();
@@ -3695,9 +3448,16 @@ public:
 
         output_buffer = (*readyWarp);
 
+        if (readyTransaction.get_type()==MPRB_DUMMY) {
+            /*readyWarp->warp_inst_t_print(true,true,true,true,"readyWarp");
+            print_warpObj_queue();
+            print_transactionObj_queue();
+            assert(false);*/
+            return;
+        }
+
         output_buffer.accessq_push_back(readyTransaction);
     }
-
 
 
     warp_inst_t pop_ready_warp(){
@@ -3710,11 +3470,16 @@ public:
         else {
             output_buffer.resetInitial_issue();
         }
+
+        /*if (output_buffer.accessq_count()==0){
+            output_buffer.warp_inst_t_print(true,true,true,true,"output_buffer");
+            print_warpObj_queue();
+            print_transactionObj_queue();
+            //assert(false);
+        }*/
+
         return output_buffer;
     }
-
-
-
 
 
     void push_ready_warp(warp_inst_t* input_warp){
@@ -3737,23 +3502,36 @@ public:
         unsigned long long issue_time = input_buffer->mprb_get_issue_time();
         std::list<mem_access_t> m_accessq = input_buffer->mprb_get_accessq_list();
 
+        bool zero_transaction_shah_flag = false;
 
-        while (m_accessq.size()>0){
-            mem_access_t transaction_element = m_accessq.front();
-            m_accessq.pop_front();
-            transaction_element.mprb_set_warp_id(warp_id);
-            MPRB_TRANSACTION_DATA* transaction_obj = new MPRB_TRANSACTION_DATA(warp_id, issue_time, transaction_element);
+        if (m_accessq.size()==0){
+            mem_access_t dummy_transaction = mem_access_t(MPRB_DUMMY, 1991, 0, false);
+            dummy_transaction.mprb_set_warp_id(warp_id);
+            MPRB_TRANSACTION_DATA* transaction_obj = new MPRB_TRANSACTION_DATA(warp_id, issue_time, dummy_transaction, input_buffer->get_memory_space_t(input_buffer->space.get_type()));
             transactionObjQueue.push_back(transaction_obj);
+            assert(dummy_transaction.get_type()==MPRB_DUMMY);
+            zero_transaction_shah_flag = true;
+        }
+        else {
+            while (m_accessq.size()>0){
+                mem_access_t transaction_element = m_accessq.front();
+                m_accessq.pop_front();
+                transaction_element.mprb_set_warp_id(warp_id);
+                MPRB_TRANSACTION_DATA* transaction_obj = new MPRB_TRANSACTION_DATA(warp_id, issue_time, transaction_element, input_buffer->get_memory_space_t(input_buffer->space.get_type()));
+                transactionObjQueue.push_back(transaction_obj);
+            }
         }
 
         input_buffer->accessq_clear();
-
         warpsObjQueue.push_back(input_buffer);
 
+        /*if (zero_transaction_shah_flag){
+            print_transactionObj_queue();
+            print_warpObj_queue();
+            assert(false);
+        }*/
+
     }
-
-
-
 
 
 
@@ -3779,35 +3557,6 @@ public:
         return false;
     }
 
-
-
-
-
-
-
-    void merger(warp_inst_t *&src) {
-
-        mem_access_t readyTransaction = transaction_pop_front();
-
-        unsigned warp_id = readyTransaction.mprb_get_warp_id();
-
-        warp_inst_t *drsvrWarp = search_warpsQueue(warp_id);
-        assert(drsvrWarp);
-
-        drsvrWarp->accessq_push_back(readyTransaction);
-
-        drsvrWarp->mprb_transaction_serviced();
-
-        if (drsvrWarp->mprb_all_transactions_done()){
-            remove_doneWarp(warp_id);
-        }
-
-        drsvrWarp->warp_inst_t_print(true, false, false, false, "drsvrWarp_merger");
-
-        src = drsvrWarp;
-    }
-
-
     void print_transactionObj_queue(){
         printf("------------------------------------------------------------\n");
         printf("MPRB Transaction Queue! Size: %u\n", transactionObjQueue.size());
@@ -3816,6 +3565,7 @@ public:
             printf("transaction_queue[%u] : ", i);
             transactionObjQueue.at(i)->get_transaction().print2();
             printf(" issued_time: %llu ;", transactionObjQueue.at(i)->get_issue_time());
+            printf(" space : %s ;", transactionObjQueue.at(i)->get_space());
             printf("\n");
         }
         printf("------------------------------------------------------------\n");
@@ -3833,27 +3583,6 @@ public:
             fprintf(statFile,"\n");
         }
         fprintf(statFile,"------------------------------------------------------------\n");
-    }
-
-
-    void print_warpObj_queue(){
-        printf("------------------------------------------------------------\n");
-        printf("MPRB WarpsQueue! Size: %u\n", warpsObjQueue.size());
-        printf("------------------------------------------------------------\n");
-        for (unsigned i=0; i<warpsObjQueue.size(); i++){
-            std::ostringstream oss;
-            oss << "warpsQueue[" << i << "]";
-            std::string name = oss.str();
-            if (warpsObjQueue[i]->mprb_isValid()){
-                warpsObjQueue[i]->warp_inst_t_print(true, false, false, false, name.c_str());
-            }
-            else {
-                printf("Something is Wrong!");
-                assert(false);
-            }
-
-        }
-        printf("------------------------------------------------------------\n");
     }
 
 
@@ -3877,22 +3606,25 @@ public:
         fprintf(statFile,"------------------------------------------------------------\n");
     }
 
-
-
-
-    void print_transaction_queue(){
-        printf("MPRB Transaction Queue! Size: %u\n", transactionsQueue.size());
+    void print_warpObj_queue(){
         printf("------------------------------------------------------------\n");
-        for (unsigned i=0; i<transactionsQueue.size(); i++){
-            printf("transaction_queue[%u] :  ", i);
-            transactionsQueue.at(i).print2();
-            printf("\n");
+        printf("MPRB WarpsQueue! Size: %u\n", warpsObjQueue.size());
+        printf("------------------------------------------------------------\n");
+        for (unsigned i=0; i<warpsObjQueue.size(); i++){
+            std::ostringstream oss;
+            oss << "warpsQueue[" << i << "]";
+            std::string name = oss.str();
+            if (warpsObjQueue[i]->mprb_isValid()){
+                warpsObjQueue[i]->warp_inst_t_print(true, false, false, false, name.c_str());
+            }
+            else {
+                printf("Something is Wrong!");
+                assert(false);
+            }
+
         }
         printf("------------------------------------------------------------\n");
     }
-
-
-
 
 
     enum drainPolicy{
@@ -3907,13 +3639,7 @@ public:
 
 private:
 
-    std::vector<warp_inst_t*> inputBuffer;
-    unsigned inputBufferSize = 2;
-
-    std::vector<warp_inst_t*> warpsQueue;
     unsigned warpQueueSize = 10;
-
-    std::vector<mem_access_t> transactionsQueue;
     unsigned transactionQueueSize = 100;
 
 
@@ -3921,8 +3647,12 @@ private:
     std::vector<warp_inst_t*> warpsObjQueue;
 
 
+    std::vector<std::vector<MPRB_TRANSACTION_DATA*>> transactionQueues;
+
     warp_inst_t output_buffer;
     warp_inst_t *input_buffer;
+
+    signature mprb_signature;
 
 };
 
