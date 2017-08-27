@@ -616,6 +616,7 @@ public:
       m_shader=NULL;
       m_initialized=false;
    }
+
    void add_cu_set(unsigned cu_set, unsigned num_cu, unsigned num_dispatch);
    typedef std::vector<register_set*> port_vector_t;
    typedef std::vector<unsigned int> uint_vector_t;
@@ -625,14 +626,24 @@ public:
    // modifiers
    bool writeback( const warp_inst_t &warp ); // might cause stall
 
-   void step()
-   {
+   void step();
+
+    /*void step()
+    {
         dispatch_ready_cu();
+        //fprintf(m_shader->drsvrObj->getStatFile(),"After dispatch_ready_cu();\n");
+        //m_shader->mprb_print_pipe_regs(ID_OC_MEM);
         allocate_reads();
+        //fprintf(m_shader->drsvrObj->getStatFile(),"After allocate_reads();\n");
+        //m_shader->mprb_print_pipe_regs(ID_OC_MEM);
         for( unsigned p = 0 ; p < m_in_ports.size(); p++ )
             allocate_cu( p );
+        //fprintf(m_shader->drsvrObj->getStatFile(),"After allocate_cu(p);\n");
+        //m_shader->mprb_print_pipe_regs(ID_OC_MEM);
         process_banks();
-   }
+        //fprintf(m_shader->drsvrObj->getStatFile(),"After process_banks();\n");
+        //m_shader->mprb_print_pipe_regs(ID_OC_MEM);
+    }*/
 
    void dump( FILE *fp ) const
    {
@@ -1777,6 +1788,7 @@ public:
     // modifiers
     void cycle();
     void reinit(unsigned start_thread, unsigned end_thread, bool reset_not_completed );
+    void mprb_print_pipe_regs(enum pipeline_stage_name_t stage_name);
     void issue_block2core( class kernel_info_t &kernel );
     void cache_flush();
     void accept_fetch_response( mem_fetch *mf );
