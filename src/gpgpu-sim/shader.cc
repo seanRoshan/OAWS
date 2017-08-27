@@ -1474,7 +1474,7 @@ void scheduler_unit::cycle()
 
     // OVERRIDE ISSUE WARP
 
-    if ( m_mem_out->has_free() && smObj->global_MPRB_obj->can_pop_warp()){
+    /*if ( m_mem_out->has_free() && smObj->global_MPRB_obj->can_pop_warp()){
 
         // Dummy Data
         const warp_inst_t *pI_temp;
@@ -1492,7 +1492,7 @@ void scheduler_unit::cycle()
         smObj->global_MPRB_obj->print_transactionObj_queue_toFile(smObj->getStatFile());
         fprintf(smObj->getStatFile(),"\n");
 
-    }
+    }*/
 
 
 
@@ -1633,8 +1633,8 @@ void scheduler_unit::cycle()
 
                             // SHOULD CHANGE HERE
 
-                            //if( m_mem_out->has_free() ) {s
-                            if ( ( smObj->global_MPRB_obj->can_push_warp() ) || ( m_mem_out->has_free() && smObj->global_MPRB_obj->can_pop_warp() ) ) {
+                            if( m_mem_out->has_free() ) {
+                            //if ( ( smObj->global_MPRB_obj->can_push_warp() ) || ( m_mem_out->has_free() && smObj->global_MPRB_obj->can_pop_warp() ) ) {
 
                                 if (!(*iter)->oaws_approved()){
                                     assert( pI->op != LOAD_OP );
@@ -1653,7 +1653,9 @@ void scheduler_unit::cycle()
                                 printf("\n");
 
 
-                                m_shader->issue_warp_mprb(*m_mem_out, pI, active_mask, warp_id, smObj->global_MPRB_obj);
+                                //m_shader->issue_warp_mprb(*m_mem_out, pI, active_mask, warp_id, smObj->global_MPRB_obj);
+
+                                m_shader->issue_warp(*m_mem_out, pI, active_mask, warp_id);
 
                                 printf("\nafter issue_mprb()\n");
                                 m_mem_out->print2(true);
@@ -3504,6 +3506,10 @@ void gpgpu_sim::shader_print_cache_stats( FILE *fout ) const{
     }
 }
 
+mprb_print_pipe_regs(){
+
+}
+
 void gpgpu_sim::shader_print_l1_miss_stat( FILE *fout ) const
 {
    unsigned total_d1_misses = 0, total_d1_accesses = 0;
@@ -4465,6 +4471,8 @@ void opndcoll_rfu_t::dispatch_ready_cu()
     		 m_shader->incnon_rf_operands(m_shader->get_config()->warp_size);//cu->get_active_count());
    	      }
     	}
+
+         cu->dump(m_shader->drsvrObj->getStatFile(), m_shader);
          cu->dispatch();
       }
    }
@@ -4539,8 +4547,10 @@ void opndcoll_rfu_t::collector_unit_t::dump(FILE *fp, const shader_core_ctx *sha
 {
    if( m_free ) {
       fprintf(fp,"    <free>\n");
+      m_shader.mpr
    } else {
       m_warp->print(fp);
+      m_output_register->print2_toFile(true, fp);
       for( unsigned i=0; i < MAX_REG_OPERANDS*2; i++ ) {
          if( m_not_ready.test(i) ) {
             std::string r = m_src_op[i].get_reg_string();
