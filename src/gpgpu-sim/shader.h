@@ -1089,12 +1089,6 @@ public:
     virtual void issue( register_set& source_reg ) {
         source_reg.move_out_to(m_dispatch_reg);
         occupied.set(m_dispatch_reg->latency);
-        if ( (m_dispatch_reg->smObj->get_sm_id() == 11) && source_reg.getName().find("OC_EX_MEM") != std::string::npos) {
-            //std::raise(SIGINT);
-            //printf("m_dispatch_reg Initialized: name : %s ;\n", source_reg.getName().c_str());
-            std::string temp = "m_dispatch_reg Initialized: name : " + source_reg.getName();
-            m_dispatch_reg->warp_inst_t_print(true, true, true, true, temp.c_str());
-        }
     }
     virtual void cycle() = 0;
     virtual void active_lanes_in_pipeline() = 0;
@@ -1236,6 +1230,9 @@ public:
     virtual void issue( register_set &inst );
     virtual void cycle();
 
+
+    void issue_mprb(const warp_inst_t* next_inst);
+
     void fill( mem_fetch *mf );
     void flush();
     void writeback();
@@ -1256,16 +1253,17 @@ public:
     // accessors
     virtual unsigned clock_multiplier() const;
 
-    virtual bool can_issue( const warp_inst_t &inst ) const
-    {
+    bool can_issue( const warp_inst_t &inst ) const;
+    /*{
         switch(inst.op) {
         case LOAD_OP: break;
         case STORE_OP: break;
         case MEMORY_BARRIER_OP: break;
         default: return false;
         }
+        fprintf(m_core->drsvrObj->getStatFile(),"can_issue(): %s;\n", m_dispatch_reg->empty()==true?"TRUE":"FALSE");
         return m_dispatch_reg->empty();
-    }
+    }*/
 
     virtual void active_lanes_in_pipeline();
     virtual bool stallable() const { return true; }
