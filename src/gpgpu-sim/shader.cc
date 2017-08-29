@@ -2143,6 +2143,7 @@ void shader_core_ctx::execute()
         bool mprb_activated = true;
         bool mprb_can_push = true;
         bool mprb_can_pop = false;
+        bool memory_warp = false;
 
 
 
@@ -2154,6 +2155,7 @@ void shader_core_ctx::execute()
 
                     mprb_can_push = drsvrObj->global_MPRB_obj->can_push_warp() ;
                     mprb_can_pop = drsvrObj->global_MPRB_obj->can_pop_warp() ;
+                    memory_warp = true;
 
                     fprintf(drsvrObj->getStatFile(),"MPRB ACTIVATED:%s ; MPRB CAN PUSH:%s ; MPRB CAN POP:%s ;\n"
                             , mprb_activated?"TRUE":"FALSE"
@@ -2167,57 +2169,90 @@ void shader_core_ctx::execute()
 
                 }
 
-
-
-
             }
         }
 
 
 
 
-        if(  ( issue_inst.has_ready() && m_fu[n]->can_issue( **ready_reg ) && mprb_can_push ) || mprb_can_pop ) {
+        if(  ( issue_inst.has_ready() && m_fu[n]->can_issue( **ready_reg ) && mprb_can_push ) ||  ( mprb_can_pop && issue_inst.has_free() ) ) {
 
 
-            if (n==3){
-                fprintf(drsvrObj->getStatFile(),"issue_inst\n");
-                issue_inst.print2_toFile(true,drsvrObj->getStatFile());
+            // PUSH SECTION
+            if ( issue_inst.has_ready() && m_fu[n]->can_issue( **ready_reg ) && mprb_can_push ) {
 
-                warp_inst_t* ready_warp = new warp_inst_t();
+                if ( (n==3) && memory_warp){
 
-                *ready_warp = **(issue_inst.get_ready());
-
-                ready_warp->warp_inst_t_print_toFile(true,true,true,true,"ready_warp_before",drsvrObj->getStatFile());
+                    assert(mprb_can_push);
+                    assert(memory_warp);
 
 
-                drsvrObj->global_MPRB_obj->push_ready_warp(ready_warp);
-                drsvrObj->global_MPRB_obj->print_warpObj_queue_toFile(drsvrObj->getStatFile());
-                drsvrObj->global_MPRB_obj->print_transactionObj_queue_toFile(drsvrObj->getStatFile());
+                    fprintf(drsvrObj->getStatFile(),"issue_inst\n");
+                    issue_inst.print2_toFile(true,drsvrObj->getStatFile());
 
 
-                // POP READY WARP FROM THE QUEUE WITH ONLY ONE TRANSACTION
-                warp_inst_t pop_out_reg = drsvrObj->global_MPRB_obj->pop_ready_warp();
+                    warp_inst_t* ready_warp = new warp_inst_t();
+
+
+
+                    fprintf(drsvrObj->getStatFile(),"BEFORE : OC_EX_MEM has Ready?%s\n",issue_inst.has_ready()?"YES":"NO");
+
+                    issue_inst.move_out_to(ready_warp);
+
+                    fprintf(drsvrObj->getStatFile(),"AFTER : OC_EX_MEM has Ready?%s\n",issue_inst.has_ready()?"YES":"NO");
+                    fprintf(drsvrObj->getStatFile(),"AFTER : OC_EX_MEM has Free?%s\n",issue_inst.has_free()?"YES":"NO");
+
+                    //*ready_warp = **(issue_inst.get_ready());
+
+                    ready_warp->warp_inst_t_print_toFile(true,true,true,true,"ready_warp_before",drsvrObj->getStatFile());
+
+                    assert(ready_warp->mprb_isValid());
+
+
+                    drsvrObj->global_MPRB_obj->push_ready_warp(ready_warp);
+                    drsvrObj->global_MPRB_obj->print_warpObj_queue_toFile(drsvrObj->getStatFile());
+                    drsvrObj->global_MPRB_obj->print_transactionObj_queue_toFile(drsvrObj->getStatFile());
+
+                    issue_inst.print2_toFile(true,drsvrObj->getStatFile());
+
+
+                    if (issue_inst.has_free() && drsvrObj->global_MPRB_obj->can_pop_warp()){
+                        mprb_can_pop = true;
+                    }
+
+
+                    mprb_print_pipe_regs(ID_OC_MEM);
+
+                    fprintf(drsvrObj->getStatFile(),"End of push!\n");
 
 /*                // COPY WARP TO ID_OC_MEM REGISTER
                 **pipe_reg = pop_out_reg; // static instruction information*/
 
+                }
 
 
-                ready_warp->warp_inst_t_print_toFile(true,true,true,true,"ready_warp_after",drsvrObj->getStatFile());
-                pop_out_reg.warp_inst_t_print_toFile(true,true,true,true,"pop_out_reg",drsvrObj->getStatFile());
-                pop_out_reg.accessq_print_toFile(drsvrObj->getStatFile());
+                if (mprb_can_pop && issue_inst.has_free()){
 
-                issue_inst.print2_toFile(true,drsvrObj->getStatFile());
+                    // POP READY WARP FROM THE QUEUE WITH ONLY ONE TRANSACTION
+                    warp_inst_t pop_out_reg = drsvrObj->global_MPRB_obj->pop_ready_warp();
+
+                    issue_inst.fill_in(pop_out_reg);
+
+                    pop_out_reg.warp_inst_t_print_toFile(true,true,true,true,"pop_out_reg",drsvrObj->getStatFile());
+                    pop_out_reg.accessq_print_toFile(drsvrObj->getStatFile());
+
+                    issue_inst.print2_toFile(true,drsvrObj->getStatFile());
 
 
-                drsvrObj->global_MPRB_obj->print_warpObj_queue_toFile(drsvrObj->getStatFile());
-                drsvrObj->global_MPRB_obj->print_transactionObj_queue_toFile(drsvrObj->getStatFile());
+                    pop_out_reg.clear();
+
+                    drsvrObj->global_MPRB_obj->print_warpObj_queue_toFile(drsvrObj->getStatFile());
+                    drsvrObj->global_MPRB_obj->print_transactionObj_queue_toFile(drsvrObj->getStatFile());
+
+                    fprintf(drsvrObj->getStatFile(),"End of POP!\n");
+                }
 
             }
-
-
-
-
 
             // LDST IS STALLABLE
             // PIPELINE_UNITS [SP & SFU] IS NOT STALLABLE
@@ -2241,6 +2276,7 @@ void shader_core_ctx::execute()
             else if( !schedule_wb_now ) {
                 // ONLY FOR LDST
                 m_fu[n]->issue( issue_inst );
+
             } else {
                 // stall issue (cannot reserve result bus)
             }
@@ -2985,10 +3021,11 @@ void ldst_unit::issue( register_set &reg_set )
 
     fprintf(m_core->drsvrObj->getStatFile(),"ldst_unit::issue()\n");
 
+    m_dispatch_reg->warp_inst_t_print_toFile(true, true, true, true, "m_dispatch_reg", m_core->drsvrObj->getStatFile());
+
     m_core->mprb_print_pipe_regs(OC_EX_MEM);
 
-    printf("SM_ID:%u ;\n", m_sid);
-    assert(false);
+    
 
 
 
@@ -3081,6 +3118,18 @@ void ldst_unit::issue_mprb(const warp_inst_t* next_inst)
 
 
     warp_inst_t* inst = const_cast<warp_inst_t*>(next_inst);
+
+
+    fprintf(m_core->drsvrObj->getStatFile(),"ldst_unit::issue()\n");
+
+    m_dispatch_reg->warp_inst_t_print_toFile(true, true, true, true, "m_dispatch_reg", m_core->drsvrObj->getStatFile());
+
+    m_core->mprb_print_pipe_regs(OC_EX_MEM);
+
+    printf("SM_ID:%u ;\n", m_sid);
+    assert(false);
+    
+
 /*
 
 
@@ -3431,6 +3480,12 @@ void ldst_unit::cycle()
 
 
    warp_inst_t &pipe_reg = *m_dispatch_reg;
+
+
+
+
+
+
    enum mem_stage_stall_type rc_fail = NO_RC_FAIL;
    mem_stage_access_type type;
 

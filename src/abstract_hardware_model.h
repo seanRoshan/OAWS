@@ -3211,6 +3211,12 @@ public:
 		return false;
 	}
 
+
+    void fill_in (warp_inst_t input_warp){
+        warp_inst_t** free = get_free();
+        **free = input_warp;
+    }
+
 	void move_in( warp_inst_t *&src ){
 		warp_inst_t** free = get_free();
 		move_warp(*free, src);

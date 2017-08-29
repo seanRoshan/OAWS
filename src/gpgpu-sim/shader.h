@@ -1090,6 +1090,7 @@ public:
         source_reg.move_out_to(m_dispatch_reg);
         occupied.set(m_dispatch_reg->latency);
     }
+
     virtual void cycle() = 0;
     virtual void active_lanes_in_pipeline() = 0;
 
