@@ -1087,6 +1087,7 @@ public:
 
     // modifiers
     virtual void issue( register_set& source_reg ) {
+        // simd_function_unit::issue(
         source_reg.move_out_to(m_dispatch_reg);
         occupied.set(m_dispatch_reg->latency);
     }
