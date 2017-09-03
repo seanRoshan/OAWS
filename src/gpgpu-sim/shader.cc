@@ -1815,9 +1815,7 @@ void shader_core_ctx::execute()
     for( unsigned n=0; n < m_num_function_units; n++ ) {
         unsigned multiplier = m_fu[n]->clock_multiplier();
         for( unsigned c=0; c < multiplier; c++ ){
-            printf("DRSVR1 execute() SID:%u\n",this->m_sid);
             m_fu[n]->cycle();
-            printf("DRSVR3 execute() SID:%u\n",this->m_sid);
         }
         m_fu[n]->active_lanes_in_pipeline();
         enum pipeline_stage_name_t issue_port = m_issue_port[n];
@@ -1895,7 +1893,6 @@ void shader_core_ctx::warp_inst_complete(const warp_inst_t &inst)
 void shader_core_ctx::writeback()
 {
 
-    printf("DRSVR writeBack()\n");
 	unsigned max_committed_thread_instructions=m_config->warp_size * (m_config->pipe_widths[EX_WB]); //from the functional units
 	m_stats->m_pipeline_duty_cycle[m_sid]=((float)(m_stats->m_num_sim_insn[m_sid]-m_stats->m_last_num_sim_insn[m_sid]))/max_committed_thread_instructions;
 
@@ -2079,6 +2076,7 @@ mem_stage_stall_type ldst_unit::process_cache_access( cache_t* cache,
 mem_stage_stall_type ldst_unit::process_memory_access_queue( cache_t *cache, warp_inst_t &inst )
 {
     //printf("DRSVR PROCESS MEMORY ACCESS QUEUE!\n");
+
     mem_stage_stall_type result = NO_RC_FAIL;
     if( inst.accessq_empty() )
         return result;
@@ -2088,17 +2086,7 @@ mem_stage_stall_type ldst_unit::process_memory_access_queue( cache_t *cache, war
         return DATA_PORT_STALL;
     }
 
-
-    //const mem_access_t &access = inst.accessq_back();
-
      //DRSVR Print Accessq
-
-    inst.accessq_print();
-
-     /*if (m_sid==5) {
-         inst.accessq_print(); }*/
-
-
 
     mem_fetch *mf = m_mf_allocator->alloc(inst,inst.accessq_back());
 
@@ -2450,8 +2438,6 @@ void ldst_unit:: issue( register_set &reg_set )
 void ldst_unit::writeback()
 {
 
-    printf("DRSVR 3 WRIEBACK()\n");
-
     // process next instruction that is going to writeback
     if( !m_next_wb.empty() ) {
         if( m_operand_collector->writeback(m_next_wb) ) {
@@ -2572,8 +2558,6 @@ void ldst_unit::issue( register_set &reg_set )
 void ldst_unit::cycle()
 {
    //std::raise(SIGINT);
-
-   printf("DRSVR2 cycle() SID:%u\n",this->m_sid);
 
    writeback();
 
@@ -3982,7 +3966,6 @@ void simt_core_cluster::core_cycle()
 {
     //printf("DRSVR m_core_sim_order_size:%u\n",m_core_sim_order.size());
     for( std::list<unsigned>::iterator it = m_core_sim_order.begin(); it != m_core_sim_order.end(); ++it ) {
-        printf("DRSVR1 m_core[%u]\n",(*it));
         m_core[*it]->cycle();
     }
 
