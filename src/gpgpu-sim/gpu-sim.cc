@@ -830,12 +830,38 @@ void gpgpu_sim::drsvr_printHistogramSingle(std::string histogramName){
 
     unsigned numberOfShaders= m_config.num_shader();
 
+
+    std::map<unsigned,unsigned> mymap;
+
+    std::map<unsigned,unsigned>::iterator it;
+
+
     printf("-------------------------------%s DETAILS------------------------------------\n\n", histogramName.c_str());
 
     for (unsigned i=0; i<numberOfShaders; i++){
         //smObjVector.at(i)->print_histogram_global_vector(histogramName);
         smObjVector.at(i)->print_histogram_global_aggr(histogramName);
+        std::vector<unsigned> histogram = smObjVector.at(i)->get_histogram_vector(histogramName);
+        std::vector<unsigned> counter = smObjVector.at(i)->get_histogram_vector_counter(histogramName);
+
+        for (unsigned i=0; i<histogram.size(); i++){
+            mymap[histogram.at(i)] += counter.at(i);
+        }
     }
+
+    unsigned total = 0;
+
+    for (it=mymap.begin(); it!=mymap.end(); it++){
+        printf("SUM %s[%u] = %u\n", histogramName.c_str(), (*it).first, (*it).second);
+        total+=(*it).second;
+    }
+
+    printf("TOTAL %s = %u\n", histogramName.c_str(), total);
+
+
+
+
+
 
     printf("----------------------------END OF %s DETAILS--------------------------------\n", histogramName.c_str());
 

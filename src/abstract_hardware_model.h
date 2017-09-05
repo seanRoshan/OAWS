@@ -997,6 +997,15 @@ public:
         }
     }
 
+    std::vector<unsigned> get_histogram_vector(){
+        return histogramVector;
+    }
+
+    std::vector<unsigned> get_histogram_vector_counter(){
+        return histogramCounterVector;
+    }
+
+
     void print_histogram() {
 
         if (type == 0){
@@ -1898,6 +1907,39 @@ public:
     }
 
 
+    std::vector<unsigned> get_histogram_vector(std::string histogramName_input) {
+
+        unsigned statVectorSize = this->get_stat_vector_size();
+        unsigned foundIndex = this->search_histogram(histogramName_input);
+
+        if (foundIndex != statVectorSize){
+            return (this->stats_obj_vector.at(foundIndex)->get_histogram_vector());
+        }
+
+
+        std::vector<unsigned> test;
+
+        return test;
+
+
+    }
+
+
+    std::vector<unsigned> get_histogram_vector_counter(std::string histogramName_input) {
+
+        unsigned statVectorSize = this->get_stat_vector_size();
+        unsigned foundIndex = this->search_histogram(histogramName_input);
+
+        if (foundIndex != statVectorSize){
+            return (this->stats_obj_vector.at(foundIndex)->get_histogram_vector_counter());
+        }
+
+        std::vector<unsigned> test;
+
+        return test;
+
+    }
+
 
 
     void print_histogram (std::string histogramName_input){
@@ -2528,6 +2570,17 @@ public:
     void print_histogram_global_aggr(std::string histogramName){
         stats_kernels_obj_global_aggr->print_histogram(histogramName);
     }
+
+    std::vector<unsigned> get_histogram_vector_counter(std::string histogramName){
+        return(stats_kernels_obj_global_aggr->get_histogram_vector_counter(histogramName));
+    }
+
+    std::vector<unsigned> get_histogram_vector(std::string histogramName){
+        return(stats_kernels_obj_global_aggr->get_histogram_vector(histogramName));
+    }
+
+
+
 
     void print_pc_histogram_global_aggr(std::string histogramName){
         stats_kernels_obj_global_aggr->print_PC_Histogram(histogramName);

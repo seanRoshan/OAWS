@@ -285,11 +285,11 @@ enum cache_request_status tag_array::access( new_addr_type addr, unsigned time, 
 
             if (smObjLoaded){
                 if (intra_warp_contention){
-                    printf("intra warp contention: warp:%u  has replaced warp:%u ;\n", evicted.m_warp_id, warp_id_in);
+                    //printf("intra warp contention: warp:%u  has replaced warp:%u ;\n", evicted.m_warp_id, warp_id_in);
                     smObj->update_histogram(warp_id_in,"INTRA_WARP_CONTENTION",1);
                 }
                 else {
-                    printf("cross warp contention: warp:%u  has replaced warp:%u ;\n", evicted.m_warp_id, warp_id_in);
+                    //printf("cross warp contention: warp:%u  has replaced warp:%u ;\n", evicted.m_warp_id, warp_id_in);
                     smObj->update_histogram(warp_id_in,"INTRA_WARP_CONTENTION",0);
                 }
             }
