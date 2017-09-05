@@ -2558,7 +2558,6 @@ void ldst_unit::issue( register_set &reg_set )
 void ldst_unit::cycle()
 {
    //std::raise(SIGINT);
-
    writeback();
 
    m_operand_collector->step();

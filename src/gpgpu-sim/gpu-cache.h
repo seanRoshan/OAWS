@@ -68,15 +68,18 @@ struct cache_block_t {
         m_alloc_time=0;
         m_fill_time=0;
         m_last_access_time=0;
+        m_warp_id=0;
         m_status=INVALID;
+
     }
-    void allocate( new_addr_type tag, new_addr_type block_addr, unsigned time )
+    void allocate( new_addr_type tag, new_addr_type block_addr, unsigned time, unsigned warp_id_in )
     {
         m_tag=tag;
         m_block_addr=block_addr;
         m_alloc_time=time;
         m_last_access_time=time;
         m_fill_time=0;
+        m_warp_id=warp_id_in;
         m_status=RESERVED;
     }
     void fill( unsigned time )
@@ -91,6 +94,7 @@ struct cache_block_t {
     unsigned         m_alloc_time;
     unsigned         m_last_access_time;
     unsigned         m_fill_time;
+    unsigned         m_warp_id;
     cache_block_state    m_status;
 };
 
@@ -357,11 +361,11 @@ public:
     ~tag_array();
 
     enum cache_request_status probe( new_addr_type addr, unsigned &idx ) const;
-    enum cache_request_status access( new_addr_type addr, unsigned time, unsigned &idx );
-    enum cache_request_status access( new_addr_type addr, unsigned time, unsigned &idx, bool &wb, cache_block_t &evicted );
+    enum cache_request_status access( new_addr_type addr, unsigned time, unsigned &idx, unsigned warp_id_in );
+    enum cache_request_status access( new_addr_type addr, unsigned time, unsigned &idx, bool &wb, cache_block_t &evicted, unsigned warp_id_in );
 
-    void fill( new_addr_type addr, unsigned time );
-    void fill( unsigned idx, unsigned time );
+    void fill( new_addr_type addr, unsigned time, unsigned warp_id );
+    void fill( unsigned idx, unsigned time, unsigned warp_id );
 
     unsigned size() const { return m_config.get_num_lines();}
     cache_block_t &get_block(unsigned idx) { return m_lines[idx];}
@@ -374,6 +378,49 @@ public:
     void get_stats(unsigned &total_access, unsigned &total_misses, unsigned &total_hit_res, unsigned &total_res_fail) const;
 
 	void update_cache_parameters(cache_config &config);
+
+    void drsvr_set_income_warp_id(unsigned warp_id_in){
+        m_income_warp_id = warp_id_in;
+        valid_m_income_warp_id = true;
+    }
+
+    void drsvr_set_tag_warp_id(unsigned warp_id_in){
+        m_tag_warp_id = warp_id_in;
+        valid_m_tag_warp_id = true;
+    }
+
+
+    bool is_intra_warp_contention(){
+        assert(valid_m_tag_warp_id);
+        assert(valid_m_income_warp_id);
+        if (m_tag_warp_id == m_income_warp_id){
+            intra_warp_contention = true;
+        }
+        else {
+            intra_warp_contention = false;
+        }
+        return intra_warp_contention;
+    }
+
+    void drsvr_reset_intrawarpDetector(){
+        m_tag_warp_id = 0;
+        m_income_warp_id = 0;
+        valid_m_income_warp_id = false;
+        valid_m_tag_warp_id = false;
+    }
+
+    void load_smObj (DRSVR *drsvrObj){
+        if (smObjLoaded==false){
+            smObj = drsvrObj;
+            smObjLoaded = true;
+        }
+    }
+
+    DRSVR* get_smObj () {
+        assert(smObjLoaded == true);
+        return smObj;
+    }
+
 protected:
     // This constructor is intended for use only from derived classes that wish to
     // avoid unnecessary memory allocation that takes place in the
@@ -402,6 +449,19 @@ protected:
 
     int m_core_id; // which shader core is using this
     int m_type_id; // what kind of cache is this (normal, texture, constant)
+
+
+    unsigned m_income_warp_id;
+    bool valid_m_income_warp_id;
+    unsigned m_tag_warp_id;
+    bool valid_m_tag_warp_id;
+    bool intra_warp_contention;
+
+
+    DRSVR *smObj;
+    bool smObjLoaded;
+
+
 };
 
 class mshr_table {
@@ -661,6 +721,9 @@ public:
         smObj = smObj_in;
 
         init( name, config, memport, status );
+
+        m_tag_array->load_smObj(smObj);
+
     }
 
     void init( const char *name,

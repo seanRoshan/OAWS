@@ -886,6 +886,8 @@ void gpgpu_sim::drsvr_printHistogramStats(){
         printf("\n\n");
         this->drsvr_printHistogramSingle("LOAD_COUNT_DIST");
         printf("\n\n");
+        this->drsvr_printHistogramSingle("INTRA_WARP_CONTENTION");
+        printf("\n\n");
     }
 
     if (OCCLUSION){
